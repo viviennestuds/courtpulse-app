@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
@@ -33,14 +33,16 @@ function startOfDay(d: Date): Date {
 
 function DateRailImpl({ selectedDate, onSelectDate, daysBefore = 14, daysAfter = 7, testId }: DateRailProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const [railWidth, setRailWidth] = useState<number>(0);
   const todayStr = getTodayDateString();
+  const railAnchor = useMemo<Date>(() => startOfDay(new Date(`${selectedDate}T12:00:00`)), [selectedDate]);
 
   const cells = useMemo<DateCell[]>(() => {
     const out: DateCell[] = [];
-    const today = startOfDay(new Date());
+    const anchor = railAnchor;
     for (let i = -daysBefore; i <= daysAfter; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
+      const d = new Date(anchor);
+      d.setDate(anchor.getDate() + i);
       const key = formatGameDate(d);
       out.push({
         key,
@@ -53,18 +55,19 @@ function DateRailImpl({ selectedDate, onSelectDate, daysBefore = 14, daysAfter =
       });
     }
     return out;
-  }, [daysBefore, daysAfter, selectedDate, todayStr]);
+  }, [daysBefore, daysAfter, railAnchor, selectedDate, todayStr]);
 
   const selectedIndex = useMemo(() => cells.findIndex(c => c.isSelected), [cells]);
 
   useEffect(() => {
     if (selectedIndex < 0) return;
-    const offset = Math.max(0, selectedIndex * (CELL_WIDTH + CELL_GAP) - Spacing.lg * 2);
+    const centerOffset = railWidth > 0 ? (railWidth - CELL_WIDTH) / 2 : Spacing.lg * 2;
+    const offset = Math.max(0, selectedIndex * (CELL_WIDTH + CELL_GAP) - centerOffset);
     const t = setTimeout(() => {
       scrollRef.current?.scrollTo({ x: offset, animated: true });
     }, 50);
     return () => clearTimeout(t);
-  }, [selectedIndex]);
+  }, [selectedIndex, railWidth]);
 
   const handlePress = useCallback((date: string) => {
     console.log('[DateRail] selected', date);
@@ -72,7 +75,7 @@ function DateRailImpl({ selectedDate, onSelectDate, daysBefore = 14, daysAfter =
   }, [onSelectDate]);
 
   return (
-    <View style={styles.wrap} testID={testId}>
+    <View style={styles.wrap} testID={testId} onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}>
       <ScrollView
         ref={scrollRef}
         horizontal

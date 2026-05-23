@@ -4,6 +4,25 @@ import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import { Game } from '@/types';
 
+function formatPlayoffMeta(game: Game): string {
+  const gameNumber = game.seriesGameNumber?.trim();
+  const seriesText = game.seriesText?.trim();
+  if (gameNumber && seriesText) return `Game ${gameNumber} · ${seriesText}`;
+  if (gameNumber) return `Game ${gameNumber}`;
+  if (seriesText) return seriesText;
+  return '';
+}
+
+function displayTeamAbbr(abbreviation: string | undefined): string {
+  const value = abbreviation?.trim();
+  return value || 'TBD';
+}
+
+function displayTeamName(name: string | undefined): string {
+  const value = name?.trim();
+  return value || 'Finals Team TBD';
+}
+
 interface GameCardProps {
   game: Game;
   onPress: () => void;
@@ -25,6 +44,11 @@ export default React.memo(function GameCard({ game, onPress }: GameCardProps) {
 
   const homeWon = isFinal && game.homeTeam.score > game.awayTeam.score;
   const awayWon = isFinal && game.awayTeam.score > game.homeTeam.score;
+  const playoffMeta = formatPlayoffMeta(game);
+  const awayAbbr = displayTeamAbbr(game.awayTeam.abbreviation);
+  const homeAbbr = displayTeamAbbr(game.homeTeam.abbreviation);
+  const awayName = displayTeamName(game.awayTeam.name);
+  const homeName = displayTeamName(game.homeTeam.name);
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -46,13 +70,14 @@ export default React.memo(function GameCard({ game, onPress }: GameCardProps) {
           {isLive && <Text style={styles.periodText}>{game.period} · {game.clock}</Text>}
           {isFinal && <Text style={styles.finalText}>{game.period}</Text>}
           {isScheduled && <Text style={styles.scheduledText}>{game.clock}</Text>}
+          {playoffMeta ? <Text style={styles.seriesText} numberOfLines={1}>{playoffMeta}</Text> : null}
         </View>
 
         <View style={styles.matchupContainer}>
           <View style={styles.teamRow}>
             <View style={[styles.teamStripe, { backgroundColor: game.awayTeam.primaryColor }]} />
-            <Text style={[styles.teamAbbr, awayWon && styles.winnerText]}>{game.awayTeam.abbreviation}</Text>
-            <Text style={styles.teamName} numberOfLines={1}>{game.awayTeam.name}</Text>
+            <Text style={[styles.teamAbbr, awayWon && styles.winnerText]}>{awayAbbr}</Text>
+            <Text style={styles.teamName} numberOfLines={1}>{awayName}</Text>
             <Text style={[
               styles.score,
               isScheduled && styles.noScore,
@@ -64,8 +89,8 @@ export default React.memo(function GameCard({ game, onPress }: GameCardProps) {
 
           <View style={styles.teamRow}>
             <View style={[styles.teamStripe, { backgroundColor: game.homeTeam.primaryColor }]} />
-            <Text style={[styles.teamAbbr, homeWon && styles.winnerText]}>{game.homeTeam.abbreviation}</Text>
-            <Text style={styles.teamName} numberOfLines={1}>{game.homeTeam.name}</Text>
+            <Text style={[styles.teamAbbr, homeWon && styles.winnerText]}>{homeAbbr}</Text>
+            <Text style={styles.teamName} numberOfLines={1}>{homeName}</Text>
             <Text style={[
               styles.score,
               isScheduled && styles.noScore,
@@ -133,6 +158,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
+  },
+  seriesText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    flex: 1,
   },
   matchupContainer: {
     gap: 6,

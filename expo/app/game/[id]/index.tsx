@@ -42,6 +42,25 @@ const ANALYTICS_SUB_NAMES = ['Runs', 'Droughts', 'Lineups', 'Impact'];
 const PBP_FILTERS = ['All', 'Scores', 'Turnovers', 'Fouls', 'Steals', 'Blocks'];
 const ANALYTICS_SUBS = ['Runs', 'Droughts', 'Lineups', 'Impact'];
 
+function formatPlayoffMeta(game: Game): string {
+  const gameNumber = game.seriesGameNumber?.trim();
+  const seriesText = game.seriesText?.trim();
+  if (gameNumber && seriesText) return `Game ${gameNumber} · ${seriesText}`;
+  if (gameNumber) return `Game ${gameNumber}`;
+  if (seriesText) return seriesText;
+  return '';
+}
+
+function displayTeamAbbr(abbreviation: string | undefined): string {
+  const value = abbreviation?.trim();
+  return value || 'TBD';
+}
+
+function displayTeamName(name: string | undefined): string {
+  const value = name?.trim();
+  return value || 'Finals Team TBD';
+}
+
 export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -193,10 +212,13 @@ export default function GameDetailScreen() {
   }
 
   if (isScheduled && effectiveGame) {
-    const sAwayAbbr = effectiveGame.awayTeam.abbreviation;
-    const sHomeAbbr = effectiveGame.homeTeam.abbreviation;
+    const sAwayAbbr = displayTeamAbbr(effectiveGame.awayTeam.abbreviation);
+    const sHomeAbbr = displayTeamAbbr(effectiveGame.homeTeam.abbreviation);
+    const sAwayName = displayTeamName(effectiveGame.awayTeam.name);
+    const sHomeName = displayTeamName(effectiveGame.homeTeam.name);
     const tipoff = effectiveGame.clock || effectiveGame.period || '';
     const arena = effectiveGame.arena || '';
+    const playoffMeta = formatPlayoffMeta(effectiveGame);
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <View style={styles.headerBar}>
@@ -218,20 +240,21 @@ export default function GameDetailScreen() {
           <View style={scheduledStyles.teamCol}>
             <View style={[styles.teamColorBar, { backgroundColor: effectiveGame.awayTeam.primaryColor }]} />
             <Text style={scheduledStyles.teamAbbr}>{sAwayAbbr}</Text>
-            <Text style={scheduledStyles.teamName}>{effectiveGame.awayTeam.name}</Text>
+            <Text style={scheduledStyles.teamName}>{sAwayName}</Text>
           </View>
           <View style={scheduledStyles.middle}>
             <View style={scheduledStyles.scheduledBadge}>
               <Text style={scheduledStyles.scheduledBadgeText}>SCHEDULED</Text>
             </View>
             {tipoff ? <Text style={scheduledStyles.tipoffText}>{tipoff}</Text> : null}
+            {playoffMeta ? <Text style={scheduledStyles.seriesText} numberOfLines={2}>{playoffMeta}</Text> : null}
             <Text style={scheduledStyles.vsText}>vs</Text>
             {arena ? <Text style={scheduledStyles.arenaText} numberOfLines={1}>{arena}</Text> : null}
           </View>
           <View style={scheduledStyles.teamCol}>
             <View style={[styles.teamColorBar, { backgroundColor: effectiveGame.homeTeam.primaryColor }]} />
             <Text style={scheduledStyles.teamAbbr}>{sHomeAbbr}</Text>
-            <Text style={scheduledStyles.teamName}>{effectiveGame.homeTeam.name}</Text>
+            <Text style={scheduledStyles.teamName}>{sHomeName}</Text>
           </View>
         </View>
 
@@ -287,8 +310,9 @@ export default function GameDetailScreen() {
   }
 
   const isLive = game.status === 'live';
-  const homeAbbr = game.homeTeam.abbreviation;
-  const awayAbbr = game.awayTeam.abbreviation;
+  const homeAbbr = displayTeamAbbr(game.homeTeam.abbreviation);
+  const awayAbbr = displayTeamAbbr(game.awayTeam.abbreviation);
+  const playoffMeta = formatPlayoffMeta(game);
   const summaryTeamTabs = [homeAbbr, awayAbbr, 'Both'];
 
 
@@ -324,6 +348,7 @@ export default function GameDetailScreen() {
             </View>
           )}
           <Text style={styles.periodInfo}>{game.period}{game.clock ? ` · ${game.clock}` : ''}</Text>
+          {playoffMeta ? <Text style={styles.seriesInfo} numberOfLines={2}>{playoffMeta}</Text> : null}
           <Text style={styles.arenaInfo}>{game.arena}</Text>
         </View>
         <View style={styles.teamScoreCol}>
@@ -3588,6 +3613,13 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
   },
+  seriesInfo: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    textAlign: 'center',
+    maxWidth: 150,
+  },
   tabContainer: {
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
@@ -4484,6 +4516,13 @@ const scheduledStyles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: FontWeight.medium,
     maxWidth: 140,
+    textAlign: 'center',
+  },
+  seriesText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    maxWidth: 150,
     textAlign: 'center',
   },
 });

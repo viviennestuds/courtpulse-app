@@ -252,14 +252,22 @@ function pickGameDate(game: ProxyGameShape, requestedDate: string): string {
     ?? requestedDate;
 }
 
+function cleanString(value: unknown): string {
+  return toStringValue(value).trim();
+}
+
 function teamToGameTeam(team: ProxyTeamShape | null | undefined): Game['homeTeam'] {
-  const teamId = toStringValue(team?.teamId);
-  const tricode = toStringValue(team?.teamTricode, 'TBD');
+  const teamId = cleanString(team?.teamId);
+  const rawTricode = cleanString(team?.teamTricode);
+  const tricode = rawTricode || 'TBD';
   const info = getTeamInfoById(Number(teamId));
+  const rawName = cleanString(team?.teamName);
+  const rawCity = cleanString(team?.teamCity);
+  const name = rawName || rawCity || (tricode === 'TBD' ? 'Finals Team TBD' : tricode);
   return {
     id: teamId,
     abbreviation: tricode,
-    name: toStringValue(team?.teamName, tricode),
+    name,
     score: toNumber(team?.score),
     primaryColor: info?.primaryColor ?? getTeamColor(tricode),
   };
