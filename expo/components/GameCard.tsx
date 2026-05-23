@@ -7,10 +7,7 @@ import { Game } from '@/types';
 function formatPlayoffMeta(game: Game): string {
   const gameNumber = game.seriesGameNumber?.trim();
   const seriesText = game.seriesText?.trim();
-  if (gameNumber && seriesText) return `Game ${gameNumber} · ${seriesText}`;
-  if (gameNumber) return `Game ${gameNumber}`;
-  if (seriesText) return seriesText;
-  return '';
+  return [gameNumber, seriesText].filter(Boolean).join(' · ');
 }
 
 function displayTeamAbbr(abbreviation: string | undefined): string {
