@@ -1,0 +1,15 @@
+{
+  "$schema": "https://rork.com/schema/rork.json",
+  "apps": [
+    {
+      "name": "CourtIQ",
+      "path": "expo",
+      "framework": "react-native"
+    },
+    {
+      "name": "CourtPulse",
+      "path": "expo",
+      "framework": "react-native"
+    }
+  ]
+}

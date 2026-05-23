@@ -1,0 +1,28 @@
+import { ShotEvent } from '@/types';
+
+export const SHOT_CHART_DATA: ShotEvent[] = [
+  { id: '1', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.5, y: 0.1, made: true, shotType: '3PT', distance: 25, period: 1, clock: '10:30', points: 3 },
+  { id: '2', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.25, y: 0.15, made: false, shotType: '3PT', distance: 24, period: 1, clock: '9:15', points: 0 },
+  { id: '3', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.45, y: 0.55, made: true, shotType: 'Layup', distance: 2, period: 1, clock: '7:42', points: 2 },
+  { id: '4', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.75, y: 0.12, made: true, shotType: '3PT', distance: 26, period: 1, clock: '5:30', points: 3 },
+  { id: '5', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.6, y: 0.35, made: false, shotType: 'Mid-Range', distance: 15, period: 2, clock: '11:00', points: 0 },
+  { id: '6', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.35, y: 0.4, made: true, shotType: 'Mid-Range', distance: 14, period: 2, clock: '8:20', points: 2 },
+  { id: '7', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.5, y: 0.6, made: true, shotType: 'Dunk', distance: 1, period: 2, clock: '6:45', points: 2 },
+  { id: '8', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.15, y: 0.2, made: false, shotType: '3PT', distance: 27, period: 2, clock: '3:10', points: 0 },
+  { id: '9', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.5, y: 0.08, made: true, shotType: '3PT', distance: 28, period: 3, clock: '11:42', points: 3 },
+  { id: '10', playerId: '101', playerName: 'J. Tatum', teamId: '1', x: 0.55, y: 0.3, made: true, shotType: 'Mid-Range', distance: 12, period: 3, clock: '8:30', points: 2 },
+  { id: '11', playerId: '201', playerName: 'J. Brunson', teamId: '4', x: 0.4, y: 0.15, made: true, shotType: '3PT', distance: 24, period: 1, clock: '10:00', points: 3 },
+  { id: '12', playerId: '201', playerName: 'J. Brunson', teamId: '4', x: 0.5, y: 0.5, made: true, shotType: 'Floater', distance: 8, period: 1, clock: '8:30', points: 2 },
+  { id: '13', playerId: '201', playerName: 'J. Brunson', teamId: '4', x: 0.65, y: 0.18, made: false, shotType: '3PT', distance: 23, period: 1, clock: '6:00', points: 0 },
+  { id: '14', playerId: '201', playerName: 'J. Brunson', teamId: '4', x: 0.48, y: 0.55, made: true, shotType: 'Layup', distance: 3, period: 2, clock: '9:45', points: 2 },
+  { id: '15', playerId: '201', playerName: 'J. Brunson', teamId: '4', x: 0.3, y: 0.12, made: true, shotType: '3PT', distance: 25, period: 3, clock: '7:15', points: 3 },
+  { id: '16', playerId: '201', playerName: 'J. Brunson', teamId: '4', x: 0.55, y: 0.4, made: false, shotType: 'Mid-Range', distance: 16, period: 2, clock: '4:30', points: 0 },
+  { id: '17', playerId: '102', playerName: 'J. Brown', teamId: '1', x: 0.2, y: 0.18, made: true, shotType: '3PT', distance: 24, period: 1, clock: '9:00', points: 3 },
+  { id: '18', playerId: '102', playerName: 'J. Brown', teamId: '1', x: 0.52, y: 0.58, made: true, shotType: 'Dunk', distance: 1, period: 2, clock: '7:00', points: 2 },
+  { id: '19', playerId: '103', playerName: 'K. Porzingis', teamId: '1', x: 0.8, y: 0.15, made: true, shotType: '3PT', distance: 25, period: 2, clock: '5:00', points: 3 },
+  { id: '20', playerId: '103', playerName: 'K. Porzingis', teamId: '1', x: 0.5, y: 0.45, made: true, shotType: 'Hook Shot', distance: 8, period: 1, clock: '4:00', points: 2 },
+  { id: '21', playerId: '203', playerName: 'J. Randle', teamId: '4', x: 0.4, y: 0.35, made: true, shotType: 'Turnaround', distance: 12, period: 1, clock: '5:30', points: 2 },
+  { id: '22', playerId: '203', playerName: 'J. Randle', teamId: '4', x: 0.6, y: 0.42, made: false, shotType: 'Mid-Range', distance: 14, period: 2, clock: '3:00', points: 0 },
+  { id: '23', playerId: '204', playerName: 'OG Anunoby', teamId: '4', x: 0.85, y: 0.1, made: true, shotType: '3PT', distance: 26, period: 3, clock: '7:55', points: 3 },
+  { id: '24', playerId: '204', playerName: 'OG Anunoby', teamId: '4', x: 0.15, y: 0.1, made: false, shotType: '3PT', distance: 27, period: 2, clock: '1:30', points: 0 },
+];
