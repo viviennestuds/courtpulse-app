@@ -48,8 +48,16 @@ function isFreeThrowDescription(desc: string): boolean {
   return desc.includes('free throw') || desc.includes('freethrow');
 }
 
-function isAssistDescription(desc: string): boolean {
-  return desc.includes('assist');
+function parseAssistNameFromDescription(description: string | null | undefined): string | null {
+  const text = description?.trim() ?? '';
+  if (!text) return null;
+  const match = text.match(/\(([^()]+?)\s+\d+\s+AST\)$/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function hasAssistAttribution(event: PlayByPlayEvent): boolean {
+  if (event.assistPlayerId || event.assistPlayerName) return true;
+  return parseAssistNameFromDescription(event.description) != null;
 }
 
 function isViolationDescription(desc: string): boolean {
@@ -89,16 +97,18 @@ export function classifyPbpEventCategories(event: PlayByPlayEvent): PbpEventCate
   if (isFreeThrow) categories.add('free_throw');
   if (isViolation) categories.add('violation');
 
-  if ((type === 'foul' || desc.includes('foul')) && !isViolation) categories.add('foul');
+  if (type === 'foul' || desc.includes('foul')) categories.add('foul');
   if (type === 'score' && !isFreeThrow) categories.add('made_fg');
   if (type === 'miss' && !isFreeThrow && !isViolation) categories.add('missed_fg');
-  if (isAssistDescription(desc)) categories.add('assist');
+  if (type === 'score' && !isFreeThrow && hasAssistAttribution(event)) categories.add('assist');
 
   return Array.from(categories);
 }
 
 export function classifyPbpEvent(event: PlayByPlayEvent): PbpEventCategory {
   const categories = classifyPbpEventCategories(event);
+  if (categories.includes('made_fg')) return 'made_fg';
+  if (categories.includes('foul')) return 'foul';
   return categories[0] ?? 'violation';
 }
 
@@ -108,8 +118,18 @@ function eventMatchesCategory(event: PbpClassifiedEvent, category: PbpEventCateg
 
 function getEventInvolvedPlayerIds(event: PlayByPlayEvent): string[] {
   const ids = new Set<string>();
+  for (const id of event.involvedPlayerIds ?? []) {
+    if (id) ids.add(String(id));
+  }
   if (event.playerId) ids.add(String(event.playerId));
+  if (event.assistPlayerId) ids.add(String(event.assistPlayerId));
   return Array.from(ids);
+}
+
+function findPlayerNameForId(event: PbpClassifiedEvent, playerId: string): string | null {
+  if (event.playerId && String(event.playerId) === playerId && event.playerName) return event.playerName;
+  if (event.assistPlayerId && String(event.assistPlayerId) === playerId && event.assistPlayerName) return event.assistPlayerName;
+  return null;
 }
 
 export function classifyPbpEvents(events: PlayByPlayEvent[]): PbpClassifiedEvent[] {
@@ -183,20 +203,21 @@ export function buildPbpPlayerOptions(
   const targetTeamId = teamFilter === 'home' ? homeTeamId : teamFilter === 'away' ? awayTeamId : null;
 
   for (const event of events) {
-    if (!event.playerId) continue;
     if (targetTeamId != null && event.teamId !== targetTeamId) continue;
 
-    const id = String(event.playerId);
-    const current = map.get(id) ?? {
-      id,
-      name: event.playerName ?? `Player ${id}`,
-      eventCount: 0,
-      teamId: event.teamId || null,
-    };
-    current.eventCount += 1;
-    if (!current.name && event.playerName) current.name = event.playerName;
-    if (!current.teamId && event.teamId) current.teamId = event.teamId;
-    map.set(id, current);
+    for (const id of event.involvedPlayerIds) {
+      const playerName = findPlayerNameForId(event, id);
+      const current = map.get(id) ?? {
+        id,
+        name: playerName ?? `Player ${id}`,
+        eventCount: 0,
+        teamId: event.teamId || null,
+      };
+      current.eventCount += 1;
+      if (current.name === `Player ${id}` && playerName) current.name = playerName;
+      if (!current.teamId && event.teamId) current.teamId = event.teamId;
+      map.set(id, current);
+    }
   }
   return Array.from(map.values()).sort((a, b) => b.eventCount - a.eventCount || a.name.localeCompare(b.name));
 }

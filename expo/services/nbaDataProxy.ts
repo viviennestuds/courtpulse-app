@@ -429,6 +429,9 @@ function transformPbpAction(action: CdnPbpAction, index: number): PlayByPlayEven
     else if (action.actionType === '2pt') scoreDelta = 2;
     else if (action.actionType === 'freethrow') scoreDelta = 1;
   }
+  const playerId = action.personId ? String(action.personId) : undefined;
+  const assistPlayerId = action.assistPersonId ? String(action.assistPersonId) : undefined;
+  const involvedPlayerIds = Array.from(new Set([playerId, assistPlayerId].filter((id): id is string => !!id)));
   const clockSeconds = parsePTToSeconds(action.clock);
   return {
     id: `${action.period}-${action.actionNumber}-${index}`,
@@ -438,8 +441,11 @@ function transformPbpAction(action: CdnPbpAction, index: number): PlayByPlayEven
     description: action.description || `${action.playerNameI || ''} ${action.actionType} ${action.subType}`.trim(),
     teamId: action.teamId ? String(action.teamId) : '',
     teamAbbr: action.teamTricode || '',
-    playerId: action.personId ? String(action.personId) : undefined,
+    playerId,
     playerName: action.playerNameI || action.playerName || undefined,
+    assistPlayerId,
+    assistPlayerName: action.assistPlayerNameInitial || undefined,
+    involvedPlayerIds: involvedPlayerIds.length > 0 ? involvedPlayerIds : undefined,
     homeScore,
     awayScore,
     scoreDelta,

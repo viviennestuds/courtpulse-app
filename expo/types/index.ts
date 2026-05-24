@@ -105,6 +105,9 @@ export interface PlayByPlayEvent {
   teamAbbr: string;
   playerId?: string;
   playerName?: string;
+  assistPlayerId?: string;
+  assistPlayerName?: string;
+  involvedPlayerIds?: string[];
   homeScore: number;
   awayScore: number;
   scoreDelta?: number;
