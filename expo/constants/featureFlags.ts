@@ -154,6 +154,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     defaultEnabled: false,
   },
   {
+    key: 'games_source_badges_enabled',
+    label: 'Games Source Badges',
+    description: 'Show developer-only data-source badges such as LIVE DATA and FALLBACK on the Games scoreboard.',
+    channel: 'experimental',
+    defaultEnabled: false,
+  },
+  {
     key: 'player_performance_screen_enabled',
     label: 'Player Performance Screen',
     description: 'Tap a player row in the box score to view individual player performance breakdown',

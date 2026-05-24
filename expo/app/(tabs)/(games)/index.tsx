@@ -24,6 +24,7 @@ export default function GamesScreen() {
   const insets = useSafeAreaInsets();
   const dateRailEnabled = useFeatureFlag('games_date_rail_enabled');
   const calendarModalEnabled = useFeatureFlag('games_calendar_modal_enabled');
+  const sourceBadgesEnabled = useFeatureFlag('games_source_badges_enabled');
 
   const today = useMemo(() => getTodayDateString(), []);
   const [selectedDate, setSelectedDate] = useState<string>(today);
@@ -37,11 +38,12 @@ export default function GamesScreen() {
         selectedDate={selectedDate}
         setSelectedDate={setSelectedDate}
         calendarModalEnabled={calendarModalEnabled}
+        sourceBadgesEnabled={sourceBadgesEnabled}
       />
     );
   }
 
-  return <LegacyGames insets={insets} router={router} />;
+  return <LegacyGames insets={insets} router={router} sourceBadgesEnabled={sourceBadgesEnabled} />;
 }
 
 interface DateDrivenProps {
@@ -51,9 +53,10 @@ interface DateDrivenProps {
   selectedDate: string;
   setSelectedDate: (d: string) => void;
   calendarModalEnabled: boolean;
+  sourceBadgesEnabled: boolean;
 }
 
-function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate, calendarModalEnabled }: DateDrivenProps) {
+function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate, calendarModalEnabled, sourceBadgesEnabled }: DateDrivenProps) {
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
   useFeedbackContext({ screen: 'Games', filters: { selectedDate } });
   const {
@@ -74,7 +77,7 @@ function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate,
 
   const isToday = selectedDate === today;
   const isInitialLoading = isLoading && games.length === 0;
-  const showSourceBadge = !(isError && games.length === 0) && dataState !== 'fallback';
+  const showSourceBadge = sourceBadgesEnabled && !(isError && games.length === 0) && dataState !== 'fallback';
 
   const handleRefresh = useCallback(() => {
     void refetch();
@@ -245,9 +248,10 @@ function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate,
 interface LegacyProps {
   insets: { top: number };
   router: ReturnType<typeof useRouter>;
+  sourceBadgesEnabled: boolean;
 }
 
-function LegacyGames({ insets, router }: LegacyProps) {
+function LegacyGames({ insets, router, sourceBadgesEnabled }: LegacyProps) {
   const [segment, setSegment] = useState(0);
   const {
     todayGames,
@@ -264,7 +268,7 @@ function LegacyGames({ insets, router }: LegacyProps) {
     isRefetching,
   } = useScoreboard();
 
-  const showSourceBadge = !(isError && todayGames.length === 0) && dataState !== 'fallback';
+  const showSourceBadge = sourceBadgesEnabled && !(isError && todayGames.length === 0) && dataState !== 'fallback';
 
   const games = useMemo(() => {
     if (segment === 0) return todayGames;
