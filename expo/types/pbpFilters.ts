@@ -14,12 +14,13 @@ export type PbpEventCategory =
   | 'foul'
   | 'substitution'
   | 'timeout'
-  | 'other';
+  | 'violation';
 
 export interface PbpPlayerOption {
   id: string;
   name: string;
   eventCount: number;
+  teamId: string | null;
 }
 
 export interface PbpFilterQuery {
@@ -33,6 +34,7 @@ export interface PbpFilterQuery {
 
 export interface PbpClassifiedEvent extends PlayByPlayEvent {
   pbpCategory: PbpEventCategory;
+  pbpCategories: PbpEventCategory[];
   isClutchContext: boolean;
   sortIndex: number;
   involvedPlayerIds: string[];

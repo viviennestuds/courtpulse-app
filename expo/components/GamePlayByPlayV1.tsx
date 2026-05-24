@@ -29,7 +29,7 @@ const EVENT_TYPE_FILTERS: Array<PbpEventCategory | 'all'> = [
   'foul',
   'substitution',
   'timeout',
-  'other',
+  'violation',
 ];
 
 interface GamePlayByPlayV1Props {
@@ -67,8 +67,9 @@ function eventColor(category: PbpEventCategory): string {
       return Colors.textSecondary;
     case 'substitution':
     case 'timeout':
-    case 'other':
       return Colors.textMuted;
+    case 'violation':
+      return Colors.warning;
   }
 }
 
@@ -115,7 +116,13 @@ export default React.memo(function GamePlayByPlayV1({
     return tabs;
   }, [maxPeriod]);
 
-  const playerOptions = useMemo<PbpPlayerOption[]>(() => buildPbpPlayerOptions(classifiedEvents), [classifiedEvents]);
+  const selectedTeamFilter = useMemo(() => {
+    return teamFilter === 0 ? 'home' : teamFilter === 1 ? 'away' : 'both';
+  }, [teamFilter]);
+
+  const playerOptions = useMemo<PbpPlayerOption[]>(() => {
+    return buildPbpPlayerOptions(classifiedEvents, selectedTeamFilter, homeTeamId, awayTeamId);
+  }, [classifiedEvents, selectedTeamFilter, homeTeamId, awayTeamId]);
 
   const selectedPlayerName = useMemo(() => {
     if (!playerFilter) return null;
@@ -124,14 +131,14 @@ export default React.memo(function GamePlayByPlayV1({
 
   const activeQuery = useMemo<PbpFilterQuery>(() => {
     return {
-      team: teamFilter === 0 ? 'home' : teamFilter === 1 ? 'away' : 'both',
+      team: selectedTeamFilter,
       period: periodFilter > 0 ? periodFilter : null,
       clutchOnly,
       playerId: playerFilter,
       eventCategory,
       sortOrder,
     };
-  }, [teamFilter, periodFilter, clutchOnly, playerFilter, eventCategory, sortOrder]);
+  }, [selectedTeamFilter, periodFilter, clutchOnly, playerFilter, eventCategory, sortOrder]);
 
   const filteredResult = useMemo(() => {
     return filterPbpEvents(classifiedEvents, activeQuery, homeTeamId, awayTeamId);
@@ -266,7 +273,7 @@ export default React.memo(function GamePlayByPlayV1({
               <View style={styles.eventBody}>
                 <View style={styles.eventMetaRow}>
                   <Text style={[styles.teamText, { color }]}>{event.teamAbbr || (isHome ? homeAbbr : awayAbbr) || '—'}</Text>
-                  <Text style={styles.categoryText}>{formatPbpCategoryLabel(event.pbpCategory)}</Text>
+                  <Text style={styles.categoryText}>{formatPbpCategoryLabel(event.eventType === 'score' && event.pbpCategories.includes('assist') ? 'made_fg' : event.pbpCategory)}</Text>
                   {event.isClutchContext && <Text style={styles.clutchBadge}>CLUTCH</Text>}
                 </View>
                 <Text style={styles.eventDescription} numberOfLines={3}>{event.description || 'No event description'}</Text>

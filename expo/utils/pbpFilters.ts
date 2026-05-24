@@ -44,32 +44,66 @@ export function isPbpClutchEvent(event: PlayByPlayEvent): boolean {
  * readable categories over exact NBA action taxonomy until raw action metadata
  * is threaded into this screen.
  */
-export function classifyPbpEvent(event: PlayByPlayEvent): PbpEventCategory {
+function isFreeThrowDescription(desc: string): boolean {
+  return desc.includes('free throw') || desc.includes('freethrow');
+}
+
+function isAssistDescription(desc: string): boolean {
+  return desc.includes('assist');
+}
+
+function isViolationDescription(desc: string): boolean {
+  return (
+    desc.includes('technical foul') ||
+    desc.includes('flagrant foul') ||
+    desc.includes('ejection') ||
+    desc.includes('ejected') ||
+    desc.includes('delay of game') ||
+    desc.includes('kicked ball') ||
+    desc.includes('kick ball') ||
+    desc.includes('defensive 3 second') ||
+    desc.includes('defensive three second') ||
+    desc.includes('offensive basket interference') ||
+    desc.includes('goaltending') ||
+    desc.includes('free throw violation')
+  );
+}
+
+/**
+ * Returns every safe filter category an event belongs to. This supports
+ * intentional overlap such as made FG + assist and turnover + violation.
+ */
+export function classifyPbpEventCategories(event: PlayByPlayEvent): PbpEventCategory[] {
   const desc = normalizedDescription(event);
   const type = event.eventType;
+  const categories = new Set<PbpEventCategory>();
+  const isFreeThrow = isFreeThrowDescription(desc);
+  const isViolation = isViolationDescription(desc);
 
-  if (type === 'substitution' || desc.includes('substitution')) return 'substitution';
-  if (type === 'timeout' || desc.includes('timeout')) return 'timeout';
-  if (type === 'turnover' || desc.includes('turnover')) return 'turnover';
-  if (type === 'steal' || desc.includes('steal')) return 'steal';
-  if (type === 'block' || desc.includes('block')) return 'block';
-  if (type === 'foul' || desc.includes('foul')) return 'foul';
-  if (type === 'rebound' || desc.includes('rebound')) return 'rebound';
-  if (desc.includes('free throw') || desc.includes('freethrow')) return 'free_throw';
-  if (type === 'score') return 'made_fg';
-  if (type === 'miss') return 'missed_fg';
-  if (desc.includes('assist')) return 'assist';
+  if (type === 'substitution' || desc.includes('substitution')) categories.add('substitution');
+  if (type === 'timeout' || desc.includes('timeout')) categories.add('timeout');
+  if (type === 'turnover' || desc.includes('turnover')) categories.add('turnover');
+  if (type === 'steal' || desc.includes('steal')) categories.add('steal');
+  if (type === 'block' || desc.includes('block')) categories.add('block');
+  if (type === 'rebound' || desc.includes('rebound')) categories.add('rebound');
+  if (isFreeThrow) categories.add('free_throw');
+  if (isViolation) categories.add('violation');
 
-  return 'other';
+  if ((type === 'foul' || desc.includes('foul')) && !isViolation) categories.add('foul');
+  if (type === 'score' && !isFreeThrow) categories.add('made_fg');
+  if (type === 'miss' && !isFreeThrow && !isViolation) categories.add('missed_fg');
+  if (isAssistDescription(desc)) categories.add('assist');
+
+  return Array.from(categories);
+}
+
+export function classifyPbpEvent(event: PlayByPlayEvent): PbpEventCategory {
+  const categories = classifyPbpEventCategories(event);
+  return categories[0] ?? 'violation';
 }
 
 function eventMatchesCategory(event: PbpClassifiedEvent, category: PbpEventCategory): boolean {
-  const desc = normalizedDescription(event);
-  if (category === 'assist') return desc.includes('assist');
-  if (category === 'free_throw') return desc.includes('free throw') || desc.includes('freethrow');
-  if (category === 'made_fg') return event.eventType === 'score' && !eventMatchesCategory(event, 'free_throw');
-  if (category === 'missed_fg') return event.eventType === 'miss' && !eventMatchesCategory(event, 'free_throw');
-  return event.pbpCategory === category;
+  return event.pbpCategories.includes(category);
 }
 
 function getEventInvolvedPlayerIds(event: PlayByPlayEvent): string[] {
@@ -82,6 +116,7 @@ export function classifyPbpEvents(events: PlayByPlayEvent[]): PbpClassifiedEvent
   return events.map((event, index) => ({
     ...event,
     pbpCategory: classifyPbpEvent(event),
+    pbpCategories: classifyPbpEventCategories(event),
     isClutchContext: isPbpClutchEvent(event),
     sortIndex: index,
     involvedPlayerIds: getEventInvolvedPlayerIds(event),
@@ -138,18 +173,29 @@ export function filterPbpEvents(
   };
 }
 
-export function buildPbpPlayerOptions(events: PbpClassifiedEvent[]): PbpPlayerOption[] {
+export function buildPbpPlayerOptions(
+  events: PbpClassifiedEvent[],
+  teamFilter: 'home' | 'away' | 'both',
+  homeTeamId: string,
+  awayTeamId: string,
+): PbpPlayerOption[] {
   const map = new Map<string, PbpPlayerOption>();
+  const targetTeamId = teamFilter === 'home' ? homeTeamId : teamFilter === 'away' ? awayTeamId : null;
+
   for (const event of events) {
     if (!event.playerId) continue;
+    if (targetTeamId != null && event.teamId !== targetTeamId) continue;
+
     const id = String(event.playerId);
     const current = map.get(id) ?? {
       id,
       name: event.playerName ?? `Player ${id}`,
       eventCount: 0,
+      teamId: event.teamId || null,
     };
     current.eventCount += 1;
     if (!current.name && event.playerName) current.name = event.playerName;
+    if (!current.teamId && event.teamId) current.teamId = event.teamId;
     map.set(id, current);
   }
   return Array.from(map.values()).sort((a, b) => b.eventCount - a.eventCount || a.name.localeCompare(b.name));
@@ -169,7 +215,7 @@ export function formatPbpCategoryLabel(category: PbpEventCategory | 'all'): stri
     foul: 'Foul',
     substitution: 'Substitution',
     timeout: 'Timeout',
-    other: 'Other',
+    violation: 'Violation',
   };
   return labels[category];
 }
