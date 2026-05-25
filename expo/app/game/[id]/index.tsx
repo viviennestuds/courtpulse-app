@@ -35,6 +35,7 @@ import OnCourtSummaryDetailSheet from '@/components/OnCourtSummaryDetailSheet';
 import FeedbackButton from '@/components/FeedbackButton';
 import { useFeedbackContext } from '@/providers/FeedbackProvider';
 import { safeBack } from '@/utils/navigation';
+import { getContextTagStyle } from '@/utils/contextTagStyles';
 
 const TABS = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
 const TAB_NAMES = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
@@ -1024,26 +1025,10 @@ function ShotDetailSheet({
 
           {hasContextTags && (
             <View style={shotDetailStyles.tagsRow}>
-              {shot.isClutch === true && (
-                <View style={shotDetailStyles.tagBadge}>
-                  <Text style={shotDetailStyles.tagText}>Clutch</Text>
-                </View>
-              )}
-              {shot.isFastBreak === true && (
-                <View style={shotDetailStyles.tagBadge}>
-                  <Text style={shotDetailStyles.tagText}>Fast Break</Text>
-                </View>
-              )}
-              {derivedTagsEnabled && (shot.contextTags ?? []).includes('off_turnover') && (
-                <View style={shotDetailStyles.derivedTagBadge}>
-                  <Text style={shotDetailStyles.derivedTagText}>Off Turnover</Text>
-                </View>
-              )}
-              {shot.isSecondChance === true && (
-                <View style={shotDetailStyles.tagBadge}>
-                  <Text style={shotDetailStyles.tagText}>2nd Chance</Text>
-                </View>
-              )}
+              {shot.isClutch === true && <ShotContextTagPill label="Clutch" />}
+              {shot.isFastBreak === true && <ShotContextTagPill label="Fast Break" />}
+              {derivedTagsEnabled && (shot.contextTags ?? []).includes('off_turnover') && <ShotContextTagPill label="Off Turnover" />}
+              {shot.isSecondChance === true && <ShotContextTagPill label="2nd Chance" />}
             </View>
           )}
 
@@ -1093,6 +1078,15 @@ function ShotDetailSheet({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function ShotContextTagPill({ label }: { label: string }) {
+  const tagStyle = getContextTagStyle(label);
+  return (
+    <View style={[shotDetailStyles.tagBadge, { backgroundColor: tagStyle.backgroundColor }]}>
+      <Text style={[shotDetailStyles.tagText, { color: tagStyle.color }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -1190,24 +1184,11 @@ const shotDetailStyles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   tagBadge: {
-    backgroundColor: Colors.warningMuted,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
     borderRadius: BorderRadius.sm,
   },
   tagText: {
-    color: Colors.warning,
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-  },
-  derivedTagBadge: {
-    backgroundColor: Colors.primaryMuted,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
-  },
-  derivedTagText: {
-    color: Colors.primary,
     fontSize: FontSize.xs,
     fontWeight: FontWeight.semibold,
   },

@@ -17,6 +17,7 @@ import {
   formatPbpCategoryLabel,
   formatPbpDerivedTagLabel,
 } from '@/utils/pbpFilters';
+import { getContextTagStyle } from '@/utils/contextTagStyles';
 
 const EVENT_TYPE_FILTERS: Array<PbpEventCategory | 'all'> = [
   'all',
@@ -288,13 +289,13 @@ export default React.memo(function GamePlayByPlayV1({
                 <View style={styles.eventMetaRow}>
                   <Text style={[styles.teamText, { color }]}>{event.teamAbbr || (isHome ? homeAbbr : awayAbbr) || '—'}</Text>
                   <Text style={styles.categoryText}>{formatPbpCategoryLabel(event.eventType === 'score' && event.pbpCategories.includes('assist') ? 'made_fg' : event.pbpCategory)}</Text>
-                  {event.isClutchContext && <Text style={styles.clutchBadge}>CLUTCH</Text>}
+                  {event.isClutchContext && <ContextTagPill label="CLUTCH" />}
                 </View>
                 <Text style={styles.eventDescription} numberOfLines={3}>{event.description || 'No event description'}</Text>
                 {enableDerivedContextTags && event.derivedTags.length > 0 && (
                   <View style={styles.derivedTagRow}>
                     {event.derivedTags.slice(0, 2).map(tag => (
-                      <Text key={tag} style={styles.derivedTagPill}>{formatPbpDerivedTagLabel(tag)}</Text>
+                      <ContextTagPill key={tag} label={formatPbpDerivedTagLabel(tag)} />
                     ))}
                   </View>
                 )}
@@ -325,6 +326,15 @@ export default React.memo(function GamePlayByPlayV1({
     </View>
   );
 });
+
+function ContextTagPill({ label }: { label: string }) {
+  const tagStyle = getContextTagStyle(label);
+  return (
+    <Text style={[styles.contextTagPill, { color: tagStyle.color, backgroundColor: tagStyle.backgroundColor }]}>
+      {label}
+    </Text>
+  );
+}
 
 function PbpPlayerSheet({
   visible,
@@ -595,33 +605,20 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: FontWeight.medium,
   },
-  clutchBadge: {
-    color: Colors.warning,
-    backgroundColor: Colors.warningMuted,
+  contextTagPill: {
     overflow: 'hidden' as const,
     borderRadius: BorderRadius.sm,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     fontSize: 8,
     fontWeight: FontWeight.bold,
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   derivedTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 5,
     marginTop: 1,
-  },
-  derivedTagPill: {
-    color: Colors.secondary,
-    backgroundColor: Colors.secondaryMuted,
-    overflow: 'hidden' as const,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontSize: 8,
-    fontWeight: FontWeight.semibold,
-    letterSpacing: 0.4,
   },
   eventDescription: {
     color: Colors.textSecondary,
