@@ -124,21 +124,30 @@ export default React.memo(function GamePlayByPlayV1({
     return buildPbpPlayerOptions(classifiedEvents, selectedTeamFilter, homeTeamId, awayTeamId);
   }, [classifiedEvents, selectedTeamFilter, homeTeamId, awayTeamId]);
 
-  const selectedPlayerName = useMemo(() => {
+  const selectedPlayerOption = useMemo(() => {
     if (!playerFilter) return null;
-    return playerOptions.find(player => player.id === playerFilter)?.name ?? null;
+    return playerOptions.find(player => player.id === playerFilter) ?? null;
   }, [playerFilter, playerOptions]);
+
+  const effectivePlayerFilter = selectedPlayerOption?.id ?? null;
+  const selectedPlayerName = selectedPlayerOption?.name ?? null;
+
+  useEffect(() => {
+    if (playerFilter && !selectedPlayerOption) {
+      setPlayerFilter(null);
+    }
+  }, [playerFilter, selectedPlayerOption]);
 
   const activeQuery = useMemo<PbpFilterQuery>(() => {
     return {
       team: selectedTeamFilter,
       period: periodFilter > 0 ? periodFilter : null,
       clutchOnly,
-      playerId: playerFilter,
+      playerId: effectivePlayerFilter,
       eventCategory,
       sortOrder,
     };
-  }, [selectedTeamFilter, periodFilter, clutchOnly, playerFilter, eventCategory, sortOrder]);
+  }, [selectedTeamFilter, periodFilter, clutchOnly, effectivePlayerFilter, eventCategory, sortOrder]);
 
   const filteredResult = useMemo(() => {
     return filterPbpEvents(classifiedEvents, activeQuery, homeTeamId, awayTeamId);
@@ -212,15 +221,15 @@ export default React.memo(function GamePlayByPlayV1({
 
         <View style={styles.playerRow}>
           <TouchableOpacity
-            style={[styles.playerFilterTrigger, playerFilter != null && styles.playerFilterTriggerActive]}
+            style={[styles.playerFilterTrigger, effectivePlayerFilter != null && styles.playerFilterTriggerActive]}
             onPress={() => setPlayerSheetVisible(true)}
             activeOpacity={0.7}
           >
-            <Search size={13} color={playerFilter ? Colors.primary : Colors.textMuted} />
-            <Text style={[styles.playerFilterText, playerFilter != null && styles.playerFilterTextActive]} numberOfLines={1}>
+            <Search size={13} color={effectivePlayerFilter ? Colors.primary : Colors.textMuted} />
+            <Text style={[styles.playerFilterText, effectivePlayerFilter != null && styles.playerFilterTextActive]} numberOfLines={1}>
               {selectedPlayerName ?? 'All Players'}
             </Text>
-            {playerFilter ? (
+            {effectivePlayerFilter ? (
               <TouchableOpacity onPress={() => setPlayerFilter(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={12} color={Colors.primary} />
               </TouchableOpacity>
@@ -298,7 +307,7 @@ export default React.memo(function GamePlayByPlayV1({
         visible={playerSheetVisible}
         onClose={() => setPlayerSheetVisible(false)}
         players={playerOptions}
-        selectedId={playerFilter}
+        selectedId={effectivePlayerFilter}
         onSelect={handlePlayerSelect}
       />
     </View>
