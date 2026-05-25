@@ -117,6 +117,36 @@ function eventMatchesCategory(event: PbpClassifiedEvent, category: PbpEventCateg
   return event.pbpCategories.includes(category);
 }
 
+function idMatches(value: string | null | undefined, playerId: string): boolean {
+  return value != null && String(value) === playerId;
+}
+
+function eventHasBroadPlayerInvolvement(event: PbpClassifiedEvent, playerId: string): boolean {
+  return event.involvedPlayerIds.includes(playerId) || idMatches(event.playerId, playerId) || idMatches(event.assistPlayerId, playerId);
+}
+
+function eventMatchesPlayerRole(event: PbpClassifiedEvent, playerId: string, category: PbpEventCategory | 'all'): boolean {
+  if (category === 'all') return eventHasBroadPlayerInvolvement(event, playerId);
+
+  switch (category) {
+    case 'made_fg':
+    case 'missed_fg':
+    case 'free_throw':
+    case 'turnover':
+    case 'steal':
+    case 'foul':
+    case 'violation':
+    case 'rebound':
+    case 'substitution':
+    case 'timeout':
+      return idMatches(event.playerId, playerId);
+    case 'assist':
+      return idMatches(event.assistPlayerId, playerId);
+    case 'block':
+      return idMatches(event.playerId, playerId) || eventHasBroadPlayerInvolvement(event, playerId);
+  }
+}
+
 interface ClassifyPbpEventsOptions {
   enableDerivedTags?: boolean;
 }
@@ -256,8 +286,8 @@ export function pbpEventMatchesQuery(
   if (query.team === 'away' && event.teamId !== awayTeamId) return false;
   if (query.period != null && event.period !== query.period) return false;
   if (query.clutchOnly && !event.isClutchContext) return false;
-  if (query.playerId != null && !event.involvedPlayerIds.includes(query.playerId)) return false;
   if (query.eventCategory !== 'all' && !eventMatchesCategory(event, query.eventCategory)) return false;
+  if (query.playerId != null && !eventMatchesPlayerRole(event, query.playerId, query.eventCategory)) return false;
   return true;
 }
 
@@ -340,7 +370,7 @@ export function formatPbpDerivedTagLabel(tag: PbpDerivedContextTag): string {
   const labels: Record<PbpDerivedContextTag, string> = {
     off_turnover: 'Off Turnover',
     early_offense: 'Early Offense',
-    official_fast_break: 'Official Fast Break',
+    official_fast_break: 'Fast Break',
   };
   return labels[tag];
 }
