@@ -1,4 +1,5 @@
 import type { PlayByPlayEvent } from '@/types';
+import { clockToSeconds, hasExplicitFastBreakSignal, isClutchContext } from '@/utils/basketballContext';
 import type {
   PbpClassifiedEvent,
   PbpDerivedContextTag,
@@ -9,23 +10,8 @@ import type {
   PbpSortOrder,
 } from '@/types/pbpFilters';
 
-function clockToSeconds(clock: string | null | undefined): number | null {
-  if (!clock) return null;
-  const trimmed = clock.trim();
-  const parts = trimmed.split(':');
-  if (parts.length < 2) return null;
-  const minutes = Number(parts[0]);
-  const seconds = Number(parts[1]);
-  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return null;
-  return minutes * 60 + seconds;
-}
-
 function normalizedDescription(event: PlayByPlayEvent): string {
   return (event.description ?? '').toLowerCase();
-}
-
-function isFiniteScore(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }
 
 /**
@@ -33,11 +19,12 @@ function isFiniteScore(value: unknown): value is number {
  * Clutch = Q4/OT, final 5:00 or less, score margin <= 5.
  */
 export function isPbpClutchEvent(event: PlayByPlayEvent): boolean {
-  const clockSeconds = clockToSeconds(event.clock);
-  if (clockSeconds == null || clockSeconds > 300) return false;
-  if (!Number.isFinite(event.period) || event.period < 4) return false;
-  if (!isFiniteScore(event.homeScore) || !isFiniteScore(event.awayScore)) return false;
-  return Math.abs(event.homeScore - event.awayScore) <= 5;
+  return isClutchContext({
+    period: event.period,
+    clockSecondsRemaining: clockToSeconds(event.clock),
+    homeScore: event.homeScore,
+    awayScore: event.awayScore,
+  });
 }
 
 /**
@@ -149,21 +136,6 @@ function eventMatchesPlayerRole(event: PbpClassifiedEvent, playerId: string, cat
 
 interface ClassifyPbpEventsOptions {
   enableDerivedTags?: boolean;
-}
-
-function normalizeRawToken(value: string | null | undefined): string {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function hasExplicitFastBreakSignal(event: PlayByPlayEvent): boolean {
-  if (event.isOfficialFastBreak === true) return true;
-  const tokens = [
-    normalizeRawToken(event.rawActionType),
-    normalizeRawToken(event.rawSubType),
-    ...(event.rawQualifiers ?? []).map(qualifier => normalizeRawToken(qualifier)),
-  ].filter(token => token.length > 0);
-
-  return tokens.some(token => token === 'fastbreak' || token === 'fastbreakpoints' || token === 'fbp' || token === 'fbps');
 }
 
 function isMadeScoringEvent(event: PbpClassifiedEvent): boolean {

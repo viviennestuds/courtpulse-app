@@ -1,5 +1,6 @@
 export type ShotResult = 'make' | 'miss';
 export type ShotZone = 'rim' | 'mid' | '3pt' | 'ft';
+export type ShotContextTag = 'off_turnover';
 
 export interface CanonicalShotEvent {
   id: string;
@@ -39,7 +40,12 @@ export interface CanonicalShotEvent {
   isSecondChance?: boolean;
   isOffAssist?: boolean;
   isFreeThrow?: boolean;
+  isClutch?: boolean;
+  contextTags?: ShotContextTag[];
 
+  rawActionType?: string;
+  rawSubType?: string;
+  rawQualifiers?: string[];
   rawDescription?: string;
 
   season?: string;
@@ -62,6 +68,8 @@ export interface ShotQuery {
 
   shotZone?: ShotZone;
   result?: ShotResult;
+  clutchOnly?: boolean;
+  contextTag?: ShotContextTag;
 }
 
 export interface ShotQuerySummary {

@@ -14,6 +14,8 @@ export function shotMatchesQuery(shot: CanonicalShotEvent, query: ShotQuery): bo
 
   if (query.shotZone != null && shot.shotZone !== query.shotZone) return false;
   if (query.result != null && shot.result !== query.result) return false;
+  if (query.clutchOnly === true && shot.isClutch !== true) return false;
+  if (query.contextTag != null && !(shot.contextTags ?? []).includes(query.contextTag)) return false;
 
   return true;
 }

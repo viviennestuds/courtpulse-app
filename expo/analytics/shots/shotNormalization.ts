@@ -1,6 +1,7 @@
 import { CdnPbpAction } from '@/services/nbaGameData';
 import { parsePTToSeconds, parsePTClock } from '@/services/nbaApi';
-import { CanonicalShotEvent, ShotResult, ShotZone } from './shotTypes';
+import { hasExplicitFastBreakSignal, isClutchContext } from '@/utils/basketballContext';
+import { CanonicalShotEvent, ShotContextTag, ShotResult, ShotZone } from './shotTypes';
 
 const RIM_SUBTYPES = new Set([
   'layup', 'dunk', 'tip', 'alleyoop', 'putback', 'hook',
@@ -87,6 +88,78 @@ function extractAssister(action: CdnPbpAction): { assisterId: string | null; ass
   return { assisterId: null, assisterName: null };
 }
 
+function isShotAction(action: CdnPbpAction): boolean {
+  const actionType = action.actionType?.toLowerCase() ?? '';
+  const isFG = actionType === '2pt' || actionType === '3pt';
+  const isFT = actionType === 'freethrow';
+  if (!isFG && !isFT) return false;
+  if (isFG && !action.isFieldGoal && action.shotResult == null) return false;
+  return action.shotResult != null;
+}
+
+function isMadeShotAction(action: CdnPbpAction): boolean {
+  return isShotAction(action) && action.shotResult?.toLowerCase() === 'made';
+}
+
+function isFreeThrowAction(action: CdnPbpAction): boolean {
+  return action.actionType?.toLowerCase() === 'freethrow';
+}
+
+function buildExplicitFastBreakContext(action: CdnPbpAction) {
+  return {
+    rawActionType: action.actionType || undefined,
+    rawSubType: action.subType || undefined,
+    rawQualifiers: action.qualifiers ?? [],
+  };
+}
+
+function deriveOffTurnoverActionNumbers(rawActions: CdnPbpAction[]): Set<number> {
+  const tagged = new Set<number>();
+  let pendingTurnoverTeamId: string | null = null;
+  let activeFreeThrowTeamId: string | null = null;
+
+  for (const action of rawActions) {
+    const actionType = action.actionType?.toLowerCase() ?? '';
+    const teamId = action.teamId ? String(action.teamId) : '';
+
+    if (activeFreeThrowTeamId && isMadeShotAction(action) && isFreeThrowAction(action) && teamId === activeFreeThrowTeamId) {
+      tagged.add(action.actionNumber);
+      continue;
+    }
+
+    if (actionType === 'turnover') {
+      pendingTurnoverTeamId = teamId || null;
+      activeFreeThrowTeamId = null;
+      continue;
+    }
+
+    if (actionType === 'timeout') {
+      pendingTurnoverTeamId = null;
+      activeFreeThrowTeamId = null;
+      continue;
+    }
+
+    if (pendingTurnoverTeamId && isMadeShotAction(action) && teamId && teamId !== pendingTurnoverTeamId) {
+      tagged.add(action.actionNumber);
+      activeFreeThrowTeamId = isFreeThrowAction(action) ? teamId : null;
+      if (!activeFreeThrowTeamId) pendingTurnoverTeamId = null;
+      continue;
+    }
+
+    if (activeFreeThrowTeamId && (!isFreeThrowAction(action) || teamId !== activeFreeThrowTeamId)) {
+      pendingTurnoverTeamId = null;
+      activeFreeThrowTeamId = null;
+    }
+
+    if (pendingTurnoverTeamId && (action.shotResult?.toLowerCase() === 'missed' || actionType === 'rebound')) {
+      pendingTurnoverTeamId = null;
+      activeFreeThrowTeamId = null;
+    }
+  }
+
+  return tagged;
+}
+
 export function normalizeShotEvents(
   rawActions: CdnPbpAction[],
   gameId: string,
@@ -94,6 +167,7 @@ export function normalizeShotEvents(
   awayTeamId?: string,
 ): CanonicalShotEvent[] {
   const shots: CanonicalShotEvent[] = [];
+  const offTurnoverActionNumbers = deriveOffTurnoverActionNumbers(rawActions);
 
   for (const action of rawActions) {
     const actionType = action.actionType?.toLowerCase() ?? '';
@@ -104,10 +178,13 @@ export function normalizeShotEvents(
     if (isFT && action.shotResult == null) continue;
 
     const clockSeconds = parsePTToSeconds(action.clock);
+    const clockSecondsForContext = action.clock ? clockSeconds : null;
     const { x, y } = isFT ? { x: null, y: null } : normalizeCoordinates(action);
     const { assisterId, assisterName } = extractAssister(action);
     const result = resolveResult(action);
     const qualifiers = action.qualifiers ?? [];
+    const normalizedQualifiers = qualifiers.map(qualifier => qualifier.toLowerCase());
+    const contextTags: ShotContextTag[] = offTurnoverActionNumbers.has(action.actionNumber) ? ['off_turnover'] : [];
 
     const teamIdStr = String(action.teamId);
     let opponentTeamId: string | undefined;
@@ -136,7 +213,7 @@ export function normalizeShotEvents(
 
       period: action.period,
       periodTime: parsePTClock(action.clock) || null,
-      clockSecondsRemaining: clockSeconds > 0 ? clockSeconds : null,
+      clockSecondsRemaining: clockSecondsForContext,
       gameSecondsElapsed: gameTimeElapsed(action.period, clockSeconds),
 
       result,
@@ -152,11 +229,21 @@ export function normalizeShotEvents(
       runId: null,
       droughtId: null,
 
-      isFastBreak: qualifiers.includes('fastbreak') || qualifiers.includes('fromturnover'),
-      isSecondChance: qualifiers.includes('2ndchance'),
+      isFastBreak: result === 'make' && hasExplicitFastBreakSignal(buildExplicitFastBreakContext(action)),
+      isSecondChance: normalizedQualifiers.includes('2ndchance'),
       isOffAssist: !isFT && result === 'make' && assisterId != null,
       isFreeThrow: isFT,
+      isClutch: isClutchContext({
+        period: action.period,
+        clockSecondsRemaining: clockSecondsForContext,
+        homeScore: Number.isFinite(scoreHomeNum) ? scoreHomeNum : null,
+        awayScore: Number.isFinite(scoreAwayNum) ? scoreAwayNum : null,
+      }),
+      contextTags,
 
+      rawActionType: action.actionType || undefined,
+      rawSubType: action.subType || undefined,
+      rawQualifiers: qualifiers,
       rawDescription: action.description || undefined,
     };
 

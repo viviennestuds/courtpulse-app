@@ -911,6 +911,7 @@ function ShotDetailSheet({
 }) {
   const insets = useSafeAreaInsets();
   const eventLinksEnabled = useFeatureFlag('shots_event_links_enabled');
+  const derivedTagsEnabled = useFeatureFlag('enableDerivedContextTags');
   if (!shot) return null;
 
   const eventUrl = eventLinksEnabled ? getShotEventUrl(shot) : undefined;
@@ -945,6 +946,7 @@ function ShotDetailSheet({
   const zoneLabel = shot.shotZone === 'rim' ? 'Rim' : shot.shotZone === 'mid' ? 'Mid-Range' : shot.shotZone === '3pt' ? '3-Point' : 'Free Throw';
   const periodLabel = shot.period <= 4 ? `Q${shot.period}` : `OT${shot.period - 4}`;
   const scoreText = shot.scoreHome != null && shot.scoreAway != null ? `${shot.scoreAway}-${shot.scoreHome}` : null;
+  const hasContextTags = shot.isClutch === true || shot.isFastBreak === true || (derivedTagsEnabled && (shot.contextTags ?? []).includes('off_turnover')) || shot.isSecondChance === true;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -1020,14 +1022,24 @@ function ShotDetailSheet({
             </View>
           )}
 
-          {(shot.isFastBreak || shot.isSecondChance) && (
+          {hasContextTags && (
             <View style={shotDetailStyles.tagsRow}>
-              {shot.isFastBreak && (
+              {shot.isClutch === true && (
+                <View style={shotDetailStyles.tagBadge}>
+                  <Text style={shotDetailStyles.tagText}>Clutch</Text>
+                </View>
+              )}
+              {shot.isFastBreak === true && (
                 <View style={shotDetailStyles.tagBadge}>
                   <Text style={shotDetailStyles.tagText}>Fast Break</Text>
                 </View>
               )}
-              {shot.isSecondChance && (
+              {derivedTagsEnabled && (shot.contextTags ?? []).includes('off_turnover') && (
+                <View style={shotDetailStyles.derivedTagBadge}>
+                  <Text style={shotDetailStyles.derivedTagText}>Off Turnover</Text>
+                </View>
+              )}
+              {shot.isSecondChance === true && (
                 <View style={shotDetailStyles.tagBadge}>
                   <Text style={shotDetailStyles.tagText}>2nd Chance</Text>
                 </View>
@@ -1188,6 +1200,17 @@ const shotDetailStyles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: FontWeight.semibold,
   },
+  derivedTagBadge: {
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  derivedTagText: {
+    color: Colors.primary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+  },
   descriptionRow: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
@@ -1265,6 +1288,7 @@ function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, 
   const [resultFilter, setResultFilter] = useState<number>(0);
   const [zoneFilter, setZoneFilter] = useState<number>(0);
   const [periodFilter, setPeriodFilter] = useState<number>(0);
+  const [clutchOnly, setClutchOnly] = useState<boolean>(false);
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
   const [facilitatorFilter, setFacilitatorFilter] = useState<string | null>(null);
   const [playerSheetVisible, setPlayerSheetVisible] = useState<boolean>(false);
@@ -1346,10 +1370,11 @@ function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, 
     const zoneMap: Record<number, ShotZone> = { 1: 'rim', 2: 'mid', 3: '3pt', 4: 'ft' };
     if (zoneFilter > 0 && zoneMap[zoneFilter]) q.shotZone = zoneMap[zoneFilter];
     if (periodFilter > 0) q.period = periodFilter;
+    if (clutchOnly) q.clutchOnly = true;
     if (playerFilter) q.playerId = playerFilter;
     if (facilitatorFilter) q.assisterId = facilitatorFilter;
     return q;
-  }, [teamFilter, resultFilter, zoneFilter, periodFilter, playerFilter, facilitatorFilter, homeTeamId, awayTeamId]);
+  }, [teamFilter, resultFilter, zoneFilter, periodFilter, clutchOnly, playerFilter, facilitatorFilter, homeTeamId, awayTeamId]);
 
   const filteredShots = useMemo(() => {
     return filterShots(canonicalShots, activeQuery);
@@ -1426,10 +1451,11 @@ function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, 
     if (resultFilter !== 0) count++;
     if (zoneFilter !== 0) count++;
     if (periodFilter !== 0) count++;
+    if (clutchOnly) count++;
     if (playerFilter) count++;
     if (facilitatorFilter) count++;
     return count;
-  }, [resultFilter, zoneFilter, periodFilter, playerFilter, facilitatorFilter]);
+  }, [resultFilter, zoneFilter, periodFilter, clutchOnly, playerFilter, facilitatorFilter]);
 
   if (rawActions.length === 0) {
     return (
@@ -1470,6 +1496,8 @@ function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, 
           {periodTabs.map((f, i) => (
             <FilterChip key={f} label={f} active={periodFilter === i} onPress={() => setPeriodFilter(i)} />
           ))}
+          <View style={shotStyles.filterDivider} />
+          <FilterChip label="Clutch" active={clutchOnly} onPress={() => setClutchOnly(previous => !previous)} />
         </ScrollView>
 
         <View style={shotStyles.playerFacilitatorRow}>
@@ -1543,6 +1571,7 @@ function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, 
               setResultFilter(0);
               setZoneFilter(0);
               setPeriodFilter(0);
+              setClutchOnly(false);
               setPlayerFilter(null);
               setFacilitatorFilter(null);
             }}
