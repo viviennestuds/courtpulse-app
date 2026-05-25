@@ -23,6 +23,16 @@ const COURT_VIEWBOX = {
   height: 470,
 } as const;
 
+const COURT_V2_VIEWBOX = {
+  width: 520,
+  height: 500,
+} as const;
+
+const COURT_V2_ORIGIN = {
+  x: 10,
+  y: 12,
+} as const;
+
 const COURT_V2 = {
   sidelineLeft: 0,
   sidelineRight: 500,
@@ -60,9 +70,12 @@ function mapShotToLegacySvgPoint(shot: CanonicalShotEvent): ChartPoint {
 function mapShotToCourtV2SvgPoint(shot: CanonicalShotEvent): ChartPoint {
   const x = typeof shot.x === 'number' ? clampUnit(shot.x) : 0.5;
   const y = typeof shot.y === 'number' ? clampUnit(shot.y) : 0;
+  const nbaDistanceFromRim = y * COURT_VIEWBOX.height;
+  const courtY = Math.min(COURT_V2.halfCourt, COURT_V2.rimY + nbaDistanceFromRim);
+
   return {
-    cx: x * COURT_VIEWBOX.width,
-    cy: y * COURT_VIEWBOX.height,
+    cx: COURT_V2_ORIGIN.x + x * COURT_VIEWBOX.width,
+    cy: COURT_V2_ORIGIN.y + courtY,
   };
 }
 
@@ -100,72 +113,66 @@ function LegacyCourtGeometry() {
 }
 
 function CourtGeometryV2() {
-  const lineColor = 'rgba(148, 163, 184, 0.34)';
-  const strongLineColor = 'rgba(203, 213, 225, 0.42)';
-  const guideLineColor = 'rgba(6, 182, 212, 0.36)';
-  const laneFill = 'rgba(59, 130, 246, 0.045)';
+  const lineColor = 'rgba(148, 163, 184, 0.24)';
+  const quietLineColor = 'rgba(148, 163, 184, 0.16)';
+  const rimLineColor = 'rgba(203, 213, 225, 0.32)';
+  const threePointColor = 'rgba(34, 211, 238, 0.46)';
+  const laneFill = 'rgba(59, 130, 246, 0.025)';
+  const x = (value: number): number => COURT_V2_ORIGIN.x + value;
+  const y = (value: number): number => COURT_V2_ORIGIN.y + value;
   const threePointD = [
-    `M ${COURT_V2.threePointLeft} ${COURT_V2.baseline}`,
-    `L ${COURT_V2.threePointLeft} ${COURT_V2.threePointCornerDepth}`,
-    `A ${COURT_V2.threePointArcRadius} ${COURT_V2.threePointArcRadius} 0 0 0 ${COURT_V2.threePointRight} ${COURT_V2.threePointCornerDepth}`,
-    `L ${COURT_V2.threePointRight} ${COURT_V2.baseline}`,
+    `M ${x(COURT_V2.threePointLeft)} ${y(COURT_V2.baseline)}`,
+    `L ${x(COURT_V2.threePointLeft)} ${y(COURT_V2.threePointCornerDepth)}`,
+    `A ${COURT_V2.threePointArcRadius} ${COURT_V2.threePointArcRadius} 0 0 0 ${x(COURT_V2.threePointRight)} ${y(COURT_V2.threePointCornerDepth)}`,
+    `L ${x(COURT_V2.threePointRight)} ${y(COURT_V2.baseline)}`,
   ].join(' ');
-  const restrictedD = `M ${COURT_V2.rimX - COURT_V2.restrictedRadius} ${COURT_V2.rimY} A ${COURT_V2.restrictedRadius} ${COURT_V2.restrictedRadius} 0 0 0 ${COURT_V2.rimX + COURT_V2.restrictedRadius} ${COURT_V2.rimY}`;
+  const restrictedD = `M ${x(COURT_V2.rimX - COURT_V2.restrictedRadius)} ${y(COURT_V2.rimY)} A ${COURT_V2.restrictedRadius} ${COURT_V2.restrictedRadius} 0 0 0 ${x(COURT_V2.rimX + COURT_V2.restrictedRadius)} ${y(COURT_V2.rimY)}`;
 
   return (
     <>
-      <Rect x="0" y="0" width="500" height="470" fill={Colors.surface} rx="8" />
-      <Rect x="0" y="0" width="500" height="470" fill="rgba(6, 182, 212, 0.025)" rx="8" />
+      <Rect x="0" y="0" width={COURT_V2_VIEWBOX.width} height={COURT_V2_VIEWBOX.height} fill={Colors.surface} />
+      <Rect x="0" y="0" width={COURT_V2_VIEWBOX.width} height={COURT_V2_VIEWBOX.height} fill="rgba(6, 182, 212, 0.018)" />
+
+      <Line x1={x(COURT_V2.sidelineLeft)} y1={y(COURT_V2.baseline)} x2={x(COURT_V2.sidelineRight)} y2={y(COURT_V2.baseline)} stroke={lineColor} strokeWidth="1" />
+      <Line x1={x(COURT_V2.sidelineLeft)} y1={y(COURT_V2.baseline)} x2={x(COURT_V2.sidelineLeft)} y2={y(COURT_V2.halfCourt)} stroke={quietLineColor} strokeWidth="1" />
+      <Line x1={x(COURT_V2.sidelineRight)} y1={y(COURT_V2.baseline)} x2={x(COURT_V2.sidelineRight)} y2={y(COURT_V2.halfCourt)} stroke={quietLineColor} strokeWidth="1" />
+      <Line x1={x(COURT_V2.sidelineLeft)} y1={y(COURT_V2.halfCourt)} x2={x(COURT_V2.sidelineRight)} y2={y(COURT_V2.halfCourt)} stroke="rgba(148, 163, 184, 0.13)" strokeWidth="1" />
 
       <Rect
-        x={COURT_V2.sidelineLeft}
-        y={COURT_V2.baseline}
-        width={COURT_V2.sidelineRight - COURT_V2.sidelineLeft}
-        height={COURT_V2.halfCourt - COURT_V2.baseline}
-        fill="none"
-        stroke={lineColor}
-        strokeWidth="1.25"
-      />
-      <Line x1="0" y1="0" x2="500" y2="0" stroke={strongLineColor} strokeWidth="2" />
-      <Line x1="0" y1="470" x2="500" y2="470" stroke="rgba(148, 163, 184, 0.2)" strokeWidth="1" />
-
-      <Rect
-        x={COURT_V2.paintLeft}
-        y="0"
+        x={x(COURT_V2.paintLeft)}
+        y={y(COURT_V2.baseline)}
         width={COURT_V2.paintRight - COURT_V2.paintLeft}
         height={COURT_V2.paintDepth}
         fill={laneFill}
         stroke={lineColor}
+        strokeWidth="1"
+      />
+      <Line
+        x1={x(COURT_V2.backboardLeft)}
+        y1={y(COURT_V2.backboardY)}
+        x2={x(COURT_V2.backboardRight)}
+        y2={y(COURT_V2.backboardY)}
+        stroke={rimLineColor}
         strokeWidth="1.5"
       />
-      <Rect x="200" y="0" width="100" height="60" fill="rgba(15, 23, 42, 0.3)" stroke="rgba(148, 163, 184, 0.22)" strokeWidth="1" />
-      <Line
-        x1={COURT_V2.backboardLeft}
-        y1={COURT_V2.backboardY}
-        x2={COURT_V2.backboardRight}
-        y2={COURT_V2.backboardY}
-        stroke={strongLineColor}
-        strokeWidth="3"
-      />
-      <Circle cx={COURT_V2.rimX} cy={COURT_V2.rimY} r="7" fill="none" stroke={strongLineColor} strokeWidth="2" />
-      <Path d={restrictedD} fill="none" stroke={lineColor} strokeWidth="1.25" />
+      <Circle cx={x(COURT_V2.rimX)} cy={y(COURT_V2.rimY)} r="5.5" fill="none" stroke={rimLineColor} strokeWidth="1.25" />
+      <Path d={restrictedD} fill="none" stroke="rgba(148, 163, 184, 0.18)" strokeWidth="1" />
 
       <Circle
-        cx={COURT_V2.rimX}
-        cy={COURT_V2.paintDepth}
+        cx={x(COURT_V2.rimX)}
+        cy={y(COURT_V2.paintDepth)}
         r={COURT_V2.freeThrowCircleRadius}
         fill="none"
         stroke={lineColor}
-        strokeWidth="1.25"
+        strokeWidth="1"
       />
-      <Line x1={COURT_V2.paintLeft} y1={COURT_V2.paintDepth} x2={COURT_V2.paintRight} y2={COURT_V2.paintDepth} stroke={strongLineColor} strokeWidth="1.5" />
+      <Line x1={x(COURT_V2.paintLeft)} y1={y(COURT_V2.paintDepth)} x2={x(COURT_V2.paintRight)} y2={y(COURT_V2.paintDepth)} stroke={lineColor} strokeWidth="1" />
 
       <Path
         d={threePointD}
         fill="none"
-        stroke={guideLineColor}
-        strokeWidth="1.75"
-        strokeDasharray="8 5"
+        stroke={threePointColor}
+        strokeWidth="1.35"
       />
     </>
   );
@@ -173,8 +180,9 @@ function CourtGeometryV2() {
 
 export default React.memo(function ShotChart({ shots, width, onShotPress, selectedShotId }: ShotChartProps) {
   const enableCourtGeometryV2 = useFeatureFlag('enableShotChartCourtGeometryV2');
-  const svgScale = width / COURT_VIEWBOX.width;
-  const svgHeight = COURT_VIEWBOX.height * svgScale;
+  const chartViewBox = enableCourtGeometryV2 ? COURT_V2_VIEWBOX : COURT_VIEWBOX;
+  const svgScale = width / chartViewBox.width;
+  const svgHeight = chartViewBox.height * svgScale;
 
   const plottableShots = useMemo(() => {
     return shots.filter(s => s.x != null && s.y != null);
@@ -204,7 +212,7 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
   return (
     <View style={styles.container}>
       <View style={[styles.courtContainer, { width, height: svgHeight }]}>
-        <Svg width={width} height={svgHeight} viewBox="0 0 500 470">
+        <Svg width={width} height={svgHeight} viewBox={`0 0 ${chartViewBox.width} ${chartViewBox.height}`}>
           {enableCourtGeometryV2 ? <CourtGeometryV2 /> : <LegacyCourtGeometry />}
 
           {plottableShots.map((shot) => {
