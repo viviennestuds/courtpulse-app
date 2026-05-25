@@ -108,6 +108,11 @@ export interface PlayByPlayEvent {
   assistPlayerId?: string;
   assistPlayerName?: string;
   involvedPlayerIds?: string[];
+  rawActionType?: string;
+  rawSubType?: string;
+  rawQualifiers?: string[];
+  possessionTeamId?: string;
+  isOfficialFastBreak?: boolean;
   homeScore: number;
   awayScore: number;
   scoreDelta?: number;

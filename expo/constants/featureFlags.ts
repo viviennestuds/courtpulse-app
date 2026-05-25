@@ -308,6 +308,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     defaultEnabled: false,
   },
   {
+    key: 'enableDerivedContextTags',
+    label: 'Derived PBP Context Tags',
+    description: 'Show CourtPulse-derived context tags on play-by-play events, such as Off Turnover and explicit NBA fast-break qualifiers, without changing official event categories.',
+    channel: 'experimental',
+    defaultEnabled: false,
+  },
+  {
     key: 'feedback_reporting_enabled',
     label: 'In-App Feedback',
     description: 'Show in-app feedback and bug reporting entry points. Submissions include auto-captured app context and post to the configured feedback webhook.',

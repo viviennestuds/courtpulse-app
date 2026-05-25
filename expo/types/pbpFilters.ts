@@ -16,6 +16,11 @@ export type PbpEventCategory =
   | 'timeout'
   | 'violation';
 
+export type PbpDerivedContextTag =
+  | 'off_turnover'
+  | 'early_offense'
+  | 'official_fast_break';
+
 export interface PbpPlayerOption {
   id: string;
   name: string;
@@ -35,6 +40,7 @@ export interface PbpFilterQuery {
 export interface PbpClassifiedEvent extends PlayByPlayEvent {
   pbpCategory: PbpEventCategory;
   pbpCategories: PbpEventCategory[];
+  derivedTags: PbpDerivedContextTag[];
   isClutchContext: boolean;
   sortIndex: number;
   involvedPlayerIds: string[];

@@ -1,6 +1,7 @@
 import type { PlayByPlayEvent } from '@/types';
 import type {
   PbpClassifiedEvent,
+  PbpDerivedContextTag,
   PbpEventCategory,
   PbpFilterQuery,
   PbpFilterResult,
@@ -116,6 +117,97 @@ function eventMatchesCategory(event: PbpClassifiedEvent, category: PbpEventCateg
   return event.pbpCategories.includes(category);
 }
 
+interface ClassifyPbpEventsOptions {
+  enableDerivedTags?: boolean;
+}
+
+function normalizeRawToken(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function hasExplicitFastBreakSignal(event: PlayByPlayEvent): boolean {
+  if (event.isOfficialFastBreak === true) return true;
+  const tokens = [
+    normalizeRawToken(event.rawActionType),
+    normalizeRawToken(event.rawSubType),
+    ...(event.rawQualifiers ?? []).map(qualifier => normalizeRawToken(qualifier)),
+  ].filter(token => token.length > 0);
+
+  return tokens.some(token => token === 'fastbreak' || token === 'fastbreakpoints' || token === 'fbp' || token === 'fbps');
+}
+
+function isMadeScoringEvent(event: PbpClassifiedEvent): boolean {
+  return event.eventType === 'score' && (event.scoreDelta ?? 0) > 0;
+}
+
+function isFreeThrowEvent(event: PbpClassifiedEvent): boolean {
+  return event.pbpCategories.includes('free_throw');
+}
+
+function isPossessionEndingMissOrRebound(event: PbpClassifiedEvent): boolean {
+  return event.pbpCategories.includes('missed_fg') || event.pbpCategories.includes('rebound');
+}
+
+function appendDerivedTag(event: PbpClassifiedEvent, tag: PbpDerivedContextTag): PbpClassifiedEvent {
+  if (event.derivedTags.includes(tag)) return event;
+  return { ...event, derivedTags: [...event.derivedTags, tag] };
+}
+
+/**
+ * CourtPulse-derived context tags live separately from official PBP categories.
+ * This pass keeps inference conservative: Fast Break requires explicit NBA/raw
+ * metadata, and Off Turnover only tags immediate post-turnover scores before a
+ * missed shot, rebound, timeout, or new turnover resets the sequence.
+ */
+export function derivePbpContextTags(events: PbpClassifiedEvent[]): PbpClassifiedEvent[] {
+  let pendingTurnoverTeamId: string | null = null;
+  let activeFreeThrowTeamId: string | null = null;
+
+  return events.map(event => {
+    let nextEvent = event;
+
+    if (isMadeScoringEvent(nextEvent) && hasExplicitFastBreakSignal(nextEvent)) {
+      nextEvent = appendDerivedTag(nextEvent, 'official_fast_break');
+    }
+
+    if (activeFreeThrowTeamId && isMadeScoringEvent(nextEvent) && isFreeThrowEvent(nextEvent) && nextEvent.teamId === activeFreeThrowTeamId) {
+      nextEvent = appendDerivedTag(nextEvent, 'off_turnover');
+      return nextEvent;
+    }
+
+    if (nextEvent.pbpCategories.includes('turnover')) {
+      pendingTurnoverTeamId = nextEvent.teamId || null;
+      activeFreeThrowTeamId = null;
+      return nextEvent;
+    }
+
+    if (nextEvent.pbpCategories.includes('timeout')) {
+      pendingTurnoverTeamId = null;
+      activeFreeThrowTeamId = null;
+      return nextEvent;
+    }
+
+    if (pendingTurnoverTeamId && isMadeScoringEvent(nextEvent) && nextEvent.teamId && nextEvent.teamId !== pendingTurnoverTeamId) {
+      nextEvent = appendDerivedTag(nextEvent, 'off_turnover');
+      activeFreeThrowTeamId = isFreeThrowEvent(nextEvent) ? nextEvent.teamId : null;
+      if (!activeFreeThrowTeamId) pendingTurnoverTeamId = null;
+      return nextEvent;
+    }
+
+    if (activeFreeThrowTeamId && (!isFreeThrowEvent(nextEvent) || nextEvent.teamId !== activeFreeThrowTeamId)) {
+      pendingTurnoverTeamId = null;
+      activeFreeThrowTeamId = null;
+    }
+
+    if (pendingTurnoverTeamId && isPossessionEndingMissOrRebound(nextEvent)) {
+      pendingTurnoverTeamId = null;
+      activeFreeThrowTeamId = null;
+    }
+
+    return nextEvent;
+  });
+}
+
 function getEventInvolvedPlayerIds(event: PlayByPlayEvent): string[] {
   const ids = new Set<string>();
   for (const id of event.involvedPlayerIds ?? []) {
@@ -132,15 +224,18 @@ function findPlayerNameForId(event: PbpClassifiedEvent, playerId: string): strin
   return null;
 }
 
-export function classifyPbpEvents(events: PlayByPlayEvent[]): PbpClassifiedEvent[] {
-  return events.map((event, index) => ({
+export function classifyPbpEvents(events: PlayByPlayEvent[], options: ClassifyPbpEventsOptions = {}): PbpClassifiedEvent[] {
+  const classified = events.map((event, index) => ({
     ...event,
     pbpCategory: classifyPbpEvent(event),
     pbpCategories: classifyPbpEventCategories(event),
+    derivedTags: [] as PbpDerivedContextTag[],
     isClutchContext: isPbpClutchEvent(event),
     sortIndex: index,
     involvedPlayerIds: getEventInvolvedPlayerIds(event),
   }));
+
+  return options.enableDerivedTags ? derivePbpContextTags(classified) : classified;
 }
 
 function sortedEvents(events: PbpClassifiedEvent[], sortOrder: PbpSortOrder): PbpClassifiedEvent[] {
@@ -239,4 +334,13 @@ export function formatPbpCategoryLabel(category: PbpEventCategory | 'all'): stri
     violation: 'Violation',
   };
   return labels[category];
+}
+
+export function formatPbpDerivedTagLabel(tag: PbpDerivedContextTag): string {
+  const labels: Record<PbpDerivedContextTag, string> = {
+    off_turnover: 'Off Turnover',
+    early_offense: 'Early Offense',
+    official_fast_break: 'Official Fast Break',
+  };
+  return labels[tag];
 }

@@ -6,6 +6,7 @@ import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import DataSourceBadge from '@/components/DataSourceBadge';
 import FilterChip from '@/components/FilterChip';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import type { DataSource } from '@/services/dataProvider';
 import type { Game, PlayByPlayEvent } from '@/types';
 import type { PbpEventCategory, PbpFilterQuery, PbpPlayerOption, PbpSortOrder } from '@/types/pbpFilters';
@@ -14,6 +15,7 @@ import {
   classifyPbpEvents,
   filterPbpEvents,
   formatPbpCategoryLabel,
+  formatPbpDerivedTagLabel,
 } from '@/utils/pbpFilters';
 
 const EVENT_TYPE_FILTERS: Array<PbpEventCategory | 'all'> = [
@@ -97,12 +99,15 @@ export default React.memo(function GamePlayByPlayV1({
   const [eventCategory, setEventCategory] = useState<PbpEventCategory | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<PbpSortOrder>(defaultSortOrder);
   const [playerSheetVisible, setPlayerSheetVisible] = useState<boolean>(false);
+  const enableDerivedContextTags = useFeatureFlag('enableDerivedContextTags');
 
   useEffect(() => {
     setSortOrder(defaultSortOrder);
   }, [defaultSortOrder]);
 
-  const classifiedEvents = useMemo(() => classifyPbpEvents(events), [events]);
+  const classifiedEvents = useMemo(() => {
+    return classifyPbpEvents(events, { enableDerivedTags: enableDerivedContextTags });
+  }, [events, enableDerivedContextTags]);
 
   const maxPeriod = useMemo(() => {
     if (classifiedEvents.length === 0) return 4;
@@ -286,6 +291,13 @@ export default React.memo(function GamePlayByPlayV1({
                   {event.isClutchContext && <Text style={styles.clutchBadge}>CLUTCH</Text>}
                 </View>
                 <Text style={styles.eventDescription} numberOfLines={3}>{event.description || 'No event description'}</Text>
+                {enableDerivedContextTags && event.derivedTags.length > 0 && (
+                  <View style={styles.derivedTagRow}>
+                    {event.derivedTags.slice(0, 2).map(tag => (
+                      <Text key={tag} style={styles.derivedTagPill}>{formatPbpDerivedTagLabel(tag)}</Text>
+                    ))}
+                  </View>
+                )}
               </View>
               <View style={styles.scoreCol}>
                 <Clock3 size={10} color={Colors.textMuted} />
@@ -593,6 +605,23 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: FontWeight.bold,
     letterSpacing: 0.6,
+  },
+  derivedTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 1,
+  },
+  derivedTagPill: {
+    color: Colors.secondary,
+    backgroundColor: Colors.secondaryMuted,
+    overflow: 'hidden' as const,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontSize: 8,
+    fontWeight: FontWeight.semibold,
+    letterSpacing: 0.4,
   },
   eventDescription: {
     color: Colors.textSecondary,
