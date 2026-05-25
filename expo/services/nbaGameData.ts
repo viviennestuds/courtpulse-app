@@ -234,6 +234,20 @@ function transformShotFromAction(action: CdnPbpAction): ShotEvent | null {
   };
 }
 
+function optionalNumberFromKeys(source: Record<string, number | string>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const value = source[key];
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string' && value.trim()) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+  }
+  return undefined;
+}
+
 function extractTeamStats(teamData: CdnBoxScoreTeam): Record<string, number> {
   const stats = teamData.statistics;
   const oreb = Number(stats.reboundsOffensive ?? 0);
@@ -243,7 +257,7 @@ function extractTeamStats(teamData: CdnBoxScoreTeam): Record<string, number> {
   if (apiTotal !== canonicalTotal) {
     console.log(`[TeamStats] Rebound mismatch: API reboundsTotal=${apiTotal}, OREB+DREB=${canonicalTotal} (team rebounds=${apiTotal - canonicalTotal})`);
   }
-  return {
+  const mappedStats: Record<string, number> = {
     points: teamData.score,
     fieldGoalsMade: Number(stats.fieldGoalsMade ?? 0),
     fieldGoalsAttempted: Number(stats.fieldGoalsAttempted ?? 0),
@@ -265,8 +279,16 @@ function extractTeamStats(teamData: CdnBoxScoreTeam): Record<string, number> {
     foulsPersonal: Number(stats.foulsPersonal ?? 0),
     pointsFastBreak: Number(stats.pointsFastBreak ?? 0),
     pointsInThePaint: Number(stats.pointsInThePaint ?? 0),
-    pointsSecondChance: Number(stats.pointsSecondChance ?? 0),
   };
+
+  const pointsOffTurnovers = optionalNumberFromKeys(stats, ['pointsOffTurnovers', 'ptsOffTurnovers', 'pointsOffTov', 'ptsOffTov']);
+  const secondChancePoints = optionalNumberFromKeys(stats, ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance']);
+  const benchPoints = optionalNumberFromKeys(stats, ['benchPoints', 'ptsBench', 'pointsBench']);
+  if (pointsOffTurnovers !== undefined) mappedStats.pointsOffTurnovers = pointsOffTurnovers;
+  if (secondChancePoints !== undefined) mappedStats.pointsSecondChance = secondChancePoints;
+  if (benchPoints !== undefined) mappedStats.benchPoints = benchPoints;
+
+  return mappedStats;
 }
 
 export async function fetchGameBoxScore(gameId: string): Promise<GameDetailData> {

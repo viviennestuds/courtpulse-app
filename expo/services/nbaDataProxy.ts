@@ -234,6 +234,20 @@ function toNumber(value: unknown, fallback: number = 0): number {
   return fallback;
 }
 
+function optionalNumberFromKeys(source: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const value = source[key];
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string' && value.trim()) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+  }
+  return undefined;
+}
+
 function toStringValue(value: unknown, fallback: string = ''): string {
   if (value === null || value === undefined) return fallback;
   return String(value);
@@ -342,7 +356,7 @@ function extractTeamStats(team: ProxyTeamShape | null | undefined): Record<strin
   const dreb = toNumber(stats.reboundsDefensive);
   const apiTotal = toNumber(stats.reboundsTotal);
   const canonicalTotal = oreb + dreb;
-  return {
+  const mappedStats: Record<string, number> = {
     points: toNumber(team?.score),
     fieldGoalsMade: toNumber(stats.fieldGoalsMade),
     fieldGoalsAttempted: toNumber(stats.fieldGoalsAttempted),
@@ -364,8 +378,16 @@ function extractTeamStats(team: ProxyTeamShape | null | undefined): Record<strin
     foulsPersonal: toNumber(stats.foulsPersonal),
     pointsFastBreak: toNumber(stats.pointsFastBreak),
     pointsInThePaint: toNumber(stats.pointsInThePaint),
-    pointsSecondChance: toNumber(stats.pointsSecondChance),
   };
+
+  const pointsOffTurnovers = optionalNumberFromKeys(stats, ['pointsOffTurnovers', 'ptsOffTurnovers', 'pointsOffTov', 'ptsOffTov']);
+  const secondChancePoints = optionalNumberFromKeys(stats, ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance']);
+  const benchPoints = optionalNumberFromKeys(stats, ['benchPoints', 'ptsBench', 'pointsBench']);
+  if (pointsOffTurnovers !== undefined) mappedStats.pointsOffTurnovers = pointsOffTurnovers;
+  if (secondChancePoints !== undefined) mappedStats.pointsSecondChance = secondChancePoints;
+  if (benchPoints !== undefined) mappedStats.benchPoints = benchPoints;
+
+  return mappedStats;
 }
 
 function normalizePbpAction(action: ProxyPbpActionShape): CdnPbpAction {

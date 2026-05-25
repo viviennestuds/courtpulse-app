@@ -39,6 +39,29 @@ import { getContextTagStyle } from '@/utils/contextTagStyles';
 
 const TABS = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
 const TAB_NAMES = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
+
+type SummaryStatRow = {
+  label: string;
+  key: string;
+  value: number | null;
+};
+
+function hasTeamStat(stats: Record<string, number>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(stats, key) && Number.isFinite(stats[key]);
+}
+
+function getOptionalTeamStat(stats: Record<string, number>, key: string): number | null {
+  return hasTeamStat(stats, key) ? stats[key] : null;
+}
+
+function formatSummaryStatValue(row: SummaryStatRow): string {
+  if (row.value === null) return '—';
+  if (row.key === 'fieldGoalsPercentage' || row.key === 'threePointersPercentage') {
+    return `${row.value.toFixed(1)}%`;
+  }
+  return String(row.value);
+}
+
 const ANALYTICS_SUB_NAMES = ['Runs', 'Droughts', 'Lineups', 'Impact'];
 const PBP_FILTERS = ['All', 'Scores', 'Turnovers', 'Fouls', 'Steals', 'Blocks'];
 const ANALYTICS_SUBS = ['Runs', 'Droughts', 'Lineups', 'Impact'];
@@ -516,10 +539,19 @@ function SummaryTab({ game, homeBoxScore, awayBoxScore, homeTeamStats, awayTeamS
             <StatBar label="Def. Reb" homeValue={homeTeamStats.reboundsDefensive ?? 0} awayValue={awayTeamStats.reboundsDefensive ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             <StatBar label="Assists" homeValue={homeTeamStats.assists ?? 0} awayValue={awayTeamStats.assists ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             <StatBar label="Turnovers" homeValue={homeTeamStats.turnovers ?? 0} awayValue={awayTeamStats.turnovers ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            {(hasTeamStat(homeTeamStats, 'pointsOffTurnovers') || hasTeamStat(awayTeamStats, 'pointsOffTurnovers')) && (
+              <StatBar label="PTS OFF TOV" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsOffTurnovers')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsOffTurnovers')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            )}
             <StatBar label="Steals" homeValue={homeTeamStats.steals ?? 0} awayValue={awayTeamStats.steals ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             <StatBar label="Blocks" homeValue={homeTeamStats.blocks ?? 0} awayValue={awayTeamStats.blocks ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             <StatBar label="Paint PTS" homeValue={homeTeamStats.pointsInThePaint ?? 0} awayValue={awayTeamStats.pointsInThePaint ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            {(hasTeamStat(homeTeamStats, 'pointsSecondChance') || hasTeamStat(awayTeamStats, 'pointsSecondChance')) && (
+              <StatBar label="2ND CHANCE" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsSecondChance')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsSecondChance')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            )}
             <StatBar label="Fast Break" homeValue={homeTeamStats.pointsFastBreak ?? 0} awayValue={awayTeamStats.pointsFastBreak ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            {(hasTeamStat(homeTeamStats, 'benchPoints') || hasTeamStat(awayTeamStats, 'benchPoints')) && (
+              <StatBar label="BENCH PTS" homeValue={getOptionalTeamStat(homeTeamStats, 'benchPoints')} awayValue={getOptionalTeamStat(awayTeamStats, 'benchPoints')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            )}
           </View>
         </>
       )}
@@ -584,21 +616,39 @@ function TeamStatsSingle({ stats, score, color }: {
   score: number;
   color: string;
 }) {
-  const statRows: Array<{ label: string; value: string }> = useMemo(() => {
-    return [
-      { label: 'Points', value: String(stats.points ?? score) },
-      { label: 'FG%', value: `${((stats.fieldGoalsPercentage ?? 0)).toFixed(1)}%` },
-      { label: '3PT%', value: `${((stats.threePointersPercentage ?? 0)).toFixed(1)}%` },
-      { label: 'Rebounds', value: String(stats.reboundsTotal ?? 0) },
-      { label: 'Off. Reb', value: String(stats.reboundsOffensive ?? 0) },
-      { label: 'Def. Reb', value: String(stats.reboundsDefensive ?? 0) },
-      { label: 'Assists', value: String(stats.assists ?? 0) },
-      { label: 'Turnovers', value: String(stats.turnovers ?? 0) },
-      { label: 'Steals', value: String(stats.steals ?? 0) },
-      { label: 'Blocks', value: String(stats.blocks ?? 0) },
-      { label: 'Paint PTS', value: String(stats.pointsInThePaint ?? 0) },
-      { label: 'Fast Break', value: String(stats.pointsFastBreak ?? 0) },
+  const statRows: SummaryStatRow[] = useMemo(() => {
+    const rows: SummaryStatRow[] = [
+      { label: 'Points', key: 'points', value: stats.points ?? score },
+      { label: 'FG%', key: 'fieldGoalsPercentage', value: stats.fieldGoalsPercentage ?? 0 },
+      { label: '3PT%', key: 'threePointersPercentage', value: stats.threePointersPercentage ?? 0 },
+      { label: 'Rebounds', key: 'reboundsTotal', value: stats.reboundsTotal ?? 0 },
+      { label: 'Off. Reb', key: 'reboundsOffensive', value: stats.reboundsOffensive ?? 0 },
+      { label: 'Def. Reb', key: 'reboundsDefensive', value: stats.reboundsDefensive ?? 0 },
+      { label: 'Assists', key: 'assists', value: stats.assists ?? 0 },
+      { label: 'Turnovers', key: 'turnovers', value: stats.turnovers ?? 0 },
     ];
+
+    if (hasTeamStat(stats, 'pointsOffTurnovers')) {
+      rows.push({ label: 'PTS OFF TOV', key: 'pointsOffTurnovers', value: stats.pointsOffTurnovers });
+    }
+
+    rows.push(
+      { label: 'Steals', key: 'steals', value: stats.steals ?? 0 },
+      { label: 'Blocks', key: 'blocks', value: stats.blocks ?? 0 },
+      { label: 'Paint PTS', key: 'pointsInThePaint', value: stats.pointsInThePaint ?? 0 },
+    );
+
+    if (hasTeamStat(stats, 'pointsSecondChance')) {
+      rows.push({ label: '2ND CHANCE', key: 'pointsSecondChance', value: stats.pointsSecondChance });
+    }
+
+    rows.push({ label: 'Fast Break', key: 'pointsFastBreak', value: stats.pointsFastBreak ?? 0 });
+
+    if (hasTeamStat(stats, 'benchPoints')) {
+      rows.push({ label: 'BENCH PTS', key: 'benchPoints', value: stats.benchPoints });
+    }
+
+    return rows;
   }, [stats, score]);
 
   return (
@@ -608,7 +658,7 @@ function TeamStatsSingle({ stats, score, color }: {
           <Text style={styles.singleStatLabel}>{row.label}</Text>
           <View style={styles.singleStatValueWrap}>
             <View style={[styles.singleStatDot, { backgroundColor: color }]} />
-            <Text style={styles.singleStatValue}>{row.value}</Text>
+            <Text style={styles.singleStatValue}>{formatSummaryStatValue(row)}</Text>
           </View>
         </View>
       ))}

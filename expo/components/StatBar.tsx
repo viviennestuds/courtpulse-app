@@ -5,18 +5,23 @@ import { Spacing, FontSize, FontWeight } from '@/constants/theme';
 
 interface StatBarProps {
   label: string;
-  homeValue: number;
-  awayValue: number;
+  homeValue: number | null;
+  awayValue: number | null;
   homeColor: string;
   awayColor: string;
   isPercentage?: boolean;
 }
 
 export default React.memo(function StatBar({ label, homeValue, awayValue, homeColor, awayColor, isPercentage }: StatBarProps) {
-  const total = homeValue + awayValue;
-  const homeWidth = total > 0 ? (homeValue / total) * 100 : 50;
-  const awayWidth = total > 0 ? (awayValue / total) * 100 : 50;
-  const format = (v: number) => isPercentage ? `${v.toFixed(1)}%` : String(v);
+  const safeHomeValue = homeValue ?? 0;
+  const safeAwayValue = awayValue ?? 0;
+  const total = safeHomeValue + safeAwayValue;
+  const homeWidth = total > 0 ? (safeHomeValue / total) * 100 : 50;
+  const awayWidth = total > 0 ? (safeAwayValue / total) * 100 : 50;
+  const format = (v: number | null) => {
+    if (v === null) return '—';
+    return isPercentage ? `${v.toFixed(1)}%` : String(v);
+  };
 
   return (
     <View style={styles.container}>
