@@ -1081,11 +1081,11 @@ function ShotDetailSheet({
   );
 }
 
-function ShotContextTagPill({ label }: { label: string }) {
+function ShotContextTagPill({ label, compact = false }: { label: string; compact?: boolean }) {
   const tagStyle = getContextTagStyle(label);
   return (
-    <View style={[shotDetailStyles.tagBadge, { backgroundColor: tagStyle.backgroundColor }]}>
-      <Text style={[shotDetailStyles.tagText, { color: tagStyle.color }]}>{label}</Text>
+    <View style={[shotDetailStyles.tagBadge, compact && shotDetailStyles.tagBadgeCompact, { backgroundColor: tagStyle.backgroundColor }]}>
+      <Text style={[shotDetailStyles.tagText, compact && shotDetailStyles.tagTextCompact, { color: tagStyle.color }]}>{label}</Text>
     </View>
   );
 }
@@ -1188,9 +1188,16 @@ const shotDetailStyles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: BorderRadius.sm,
   },
+  tagBadgeCompact: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   tagText: {
     fontSize: FontSize.xs,
     fontWeight: FontWeight.semibold,
+  },
+  tagTextCompact: {
+    fontSize: 9,
   },
   descriptionRow: {
     backgroundColor: Colors.surface,
@@ -1819,6 +1826,7 @@ function FtAggregateSheet({ visible, onClose, summary, shots }: {
   shots: CanonicalShotEvent[];
 }) {
   const insets = useSafeAreaInsets();
+  const derivedTagsEnabled = useFeatureFlag('enableDerivedContextTags');
   const ftPoints = summary.ftMade;
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -1855,12 +1863,22 @@ function FtAggregateSheet({ visible, onClose, summary, shots }: {
             {shots.map(s => {
               const isMake = s.result === 'make';
               const periodLabel = s.period <= 4 ? `Q${s.period}` : `OT${s.period - 4}`;
+              const hasFtContextTags = s.isClutch === true || s.isFastBreak === true || (derivedTagsEnabled && (s.contextTags ?? []).includes('off_turnover'));
               return (
                 <View key={s.id} style={shotStyles.ftListRow}>
                   <View style={[shotStyles.ftListDot, { backgroundColor: isMake ? Colors.positive : Colors.negative }]} />
                   <Text style={shotStyles.ftListPeriod}>{periodLabel}</Text>
                   <Text style={shotStyles.ftListClock}>{s.periodTime ?? '—'}</Text>
-                  <Text style={shotStyles.ftListName} numberOfLines={1}>{s.playerName ?? 'Unknown'}</Text>
+                  <View style={shotStyles.ftListNameWrap}>
+                    <Text style={shotStyles.ftListName} numberOfLines={1}>{s.playerName ?? 'Unknown'}</Text>
+                    {hasFtContextTags && (
+                      <View style={shotStyles.ftContextTagsRow}>
+                        {s.isClutch === true && <ShotContextTagPill label="Clutch" compact />}
+                        {s.isFastBreak === true && <ShotContextTagPill label="Fast Break" compact />}
+                        {derivedTagsEnabled && (s.contextTags ?? []).includes('off_turnover') && <ShotContextTagPill label="Off Turnover" compact />}
+                      </View>
+                    )}
+                  </View>
                   <Text style={[shotStyles.ftListResult, { color: isMake ? Colors.positive : Colors.negative }]}>
                     {isMake ? 'MAKE' : 'MISS'}
                   </Text>
@@ -2288,11 +2306,19 @@ const shotStyles = StyleSheet.create({
     width: 50,
     fontVariant: ['tabular-nums'] as const,
   },
-  ftListName: {
+  ftListNameWrap: {
     flex: 1,
+    gap: 3,
+  },
+  ftListName: {
     color: Colors.textPrimary,
     fontSize: FontSize.sm,
     fontWeight: FontWeight.medium,
+  },
+  ftContextTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
   },
   ftListResult: {
     fontSize: 10,
