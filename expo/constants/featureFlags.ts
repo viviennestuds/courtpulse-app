@@ -203,6 +203,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     defaultEnabled: true,
   },
   {
+    key: 'enableShotChartCourtGeometryV2',
+    label: 'Shot Chart Court Geometry V2',
+    description: 'Use refreshed basketball-correct half-court geometry for the Shots screen chart while preserving legacy rendering behind the flag.',
+    channel: 'experimental',
+    defaultEnabled: false,
+  },
+  {
     key: 'stretches_unified_card_enabled',
     label: 'Unified Runs/Droughts Card',
     description: 'Render Runs and Droughts using the unified StretchCard with primary lineup and phases',

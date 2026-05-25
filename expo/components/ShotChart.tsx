@@ -1,9 +1,10 @@
 import React, { useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Svg, { Rect, Circle, Line, Path } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
-import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize } from '@/constants/theme';
 import { CanonicalShotEvent } from '@/analytics/shots';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 
 interface ShotChartProps {
   shots: CanonicalShotEvent[];
@@ -12,8 +13,168 @@ interface ShotChartProps {
   selectedShotId?: string | null;
 }
 
+interface ChartPoint {
+  cx: number;
+  cy: number;
+}
+
+const COURT_VIEWBOX = {
+  width: 500,
+  height: 470,
+} as const;
+
+const COURT_V2 = {
+  sidelineLeft: 0,
+  sidelineRight: 500,
+  baseline: 0,
+  halfCourt: 470,
+  rimX: 250,
+  rimY: 52.5,
+  backboardY: 40,
+  backboardLeft: 220,
+  backboardRight: 280,
+  paintLeft: 170,
+  paintRight: 330,
+  paintDepth: 190,
+  restrictedRadius: 40,
+  freeThrowCircleRadius: 60,
+  threePointLeft: 30,
+  threePointRight: 470,
+  threePointCornerDepth: 142,
+  threePointArcRadius: 237.5,
+} as const;
+
+function clampUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function mapShotToLegacySvgPoint(shot: CanonicalShotEvent): ChartPoint {
+  const x = typeof shot.x === 'number' ? clampUnit(shot.x) : 0.5;
+  const y = typeof shot.y === 'number' ? clampUnit(shot.y) : 0;
+  return {
+    cx: x * 440 + 30,
+    cy: y * 420 + 10,
+  };
+}
+
+function mapShotToCourtV2SvgPoint(shot: CanonicalShotEvent): ChartPoint {
+  const x = typeof shot.x === 'number' ? clampUnit(shot.x) : 0.5;
+  const y = typeof shot.y === 'number' ? clampUnit(shot.y) : 0;
+  return {
+    cx: x * COURT_VIEWBOX.width,
+    cy: y * COURT_VIEWBOX.height,
+  };
+}
+
+function mapShotToLegacyHitPoint(shot: CanonicalShotEvent, width: number, svgHeight: number): ChartPoint {
+  const x = typeof shot.x === 'number' ? clampUnit(shot.x) : 0.5;
+  const y = typeof shot.y === 'number' ? clampUnit(shot.y) : 0;
+  return {
+    cx: x * (width - 60) + 30 * (width / COURT_VIEWBOX.width),
+    cy: y * (svgHeight * 420 / COURT_VIEWBOX.height) + 10 * (svgHeight / COURT_VIEWBOX.height),
+  };
+}
+
+function LegacyCourtGeometry() {
+  return (
+    <>
+      <Rect x="0" y="0" width="500" height="470" fill={Colors.surface} rx="8" />
+
+      <Rect x="30" y="0" width="440" height="470" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
+      <Rect x="170" y="0" width="160" height="190" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
+      <Circle cx="250" cy="190" r="60" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
+      <Rect x="200" y="0" width="100" height="60" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
+      <Circle cx="250" cy="60" r="6" fill={Colors.cardBorder} />
+
+      <Path
+        d="M 30 0 L 30 160 C 30 290 470 290 470 160 L 470 0"
+        fill="none"
+        stroke={Colors.cardBorder}
+        strokeWidth="1.5"
+        strokeDasharray="6 4"
+      />
+
+      <Line x1="30" y1="0" x2="470" y2="0" stroke={Colors.cardBorder} strokeWidth="2" />
+    </>
+  );
+}
+
+function CourtGeometryV2() {
+  const lineColor = 'rgba(148, 163, 184, 0.34)';
+  const strongLineColor = 'rgba(203, 213, 225, 0.42)';
+  const guideLineColor = 'rgba(6, 182, 212, 0.36)';
+  const laneFill = 'rgba(59, 130, 246, 0.045)';
+  const threePointD = [
+    `M ${COURT_V2.threePointLeft} ${COURT_V2.baseline}`,
+    `L ${COURT_V2.threePointLeft} ${COURT_V2.threePointCornerDepth}`,
+    `A ${COURT_V2.threePointArcRadius} ${COURT_V2.threePointArcRadius} 0 0 0 ${COURT_V2.threePointRight} ${COURT_V2.threePointCornerDepth}`,
+    `L ${COURT_V2.threePointRight} ${COURT_V2.baseline}`,
+  ].join(' ');
+  const restrictedD = `M ${COURT_V2.rimX - COURT_V2.restrictedRadius} ${COURT_V2.rimY} A ${COURT_V2.restrictedRadius} ${COURT_V2.restrictedRadius} 0 0 0 ${COURT_V2.rimX + COURT_V2.restrictedRadius} ${COURT_V2.rimY}`;
+
+  return (
+    <>
+      <Rect x="0" y="0" width="500" height="470" fill={Colors.surface} rx="8" />
+      <Rect x="0" y="0" width="500" height="470" fill="rgba(6, 182, 212, 0.025)" rx="8" />
+
+      <Rect
+        x={COURT_V2.sidelineLeft}
+        y={COURT_V2.baseline}
+        width={COURT_V2.sidelineRight - COURT_V2.sidelineLeft}
+        height={COURT_V2.halfCourt - COURT_V2.baseline}
+        fill="none"
+        stroke={lineColor}
+        strokeWidth="1.25"
+      />
+      <Line x1="0" y1="0" x2="500" y2="0" stroke={strongLineColor} strokeWidth="2" />
+      <Line x1="0" y1="470" x2="500" y2="470" stroke="rgba(148, 163, 184, 0.2)" strokeWidth="1" />
+
+      <Rect
+        x={COURT_V2.paintLeft}
+        y="0"
+        width={COURT_V2.paintRight - COURT_V2.paintLeft}
+        height={COURT_V2.paintDepth}
+        fill={laneFill}
+        stroke={lineColor}
+        strokeWidth="1.5"
+      />
+      <Rect x="200" y="0" width="100" height="60" fill="rgba(15, 23, 42, 0.3)" stroke="rgba(148, 163, 184, 0.22)" strokeWidth="1" />
+      <Line
+        x1={COURT_V2.backboardLeft}
+        y1={COURT_V2.backboardY}
+        x2={COURT_V2.backboardRight}
+        y2={COURT_V2.backboardY}
+        stroke={strongLineColor}
+        strokeWidth="3"
+      />
+      <Circle cx={COURT_V2.rimX} cy={COURT_V2.rimY} r="7" fill="none" stroke={strongLineColor} strokeWidth="2" />
+      <Path d={restrictedD} fill="none" stroke={lineColor} strokeWidth="1.25" />
+
+      <Circle
+        cx={COURT_V2.rimX}
+        cy={COURT_V2.paintDepth}
+        r={COURT_V2.freeThrowCircleRadius}
+        fill="none"
+        stroke={lineColor}
+        strokeWidth="1.25"
+      />
+      <Line x1={COURT_V2.paintLeft} y1={COURT_V2.paintDepth} x2={COURT_V2.paintRight} y2={COURT_V2.paintDepth} stroke={strongLineColor} strokeWidth="1.5" />
+
+      <Path
+        d={threePointD}
+        fill="none"
+        stroke={guideLineColor}
+        strokeWidth="1.75"
+        strokeDasharray="8 5"
+      />
+    </>
+  );
+}
+
 export default React.memo(function ShotChart({ shots, width, onShotPress, selectedShotId }: ShotChartProps) {
-  const height = width * 0.94;
+  const enableCourtGeometryV2 = useFeatureFlag('enableShotChartCourtGeometryV2');
+  const svgScale = width / COURT_VIEWBOX.width;
+  const svgHeight = COURT_VIEWBOX.height * svgScale;
 
   const plottableShots = useMemo(() => {
     return shots.filter(s => s.x != null && s.y != null);
@@ -21,11 +182,17 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
 
   const shotPositions = useMemo(() => {
     return plottableShots.map(shot => {
-      const cx = (shot.x as number) * (width - 60) + 30 * (width / 500);
-      const cy = (shot.y as number) * (height * 420 / 470) + 10 * (height / 470);
-      return { shot, cx, cy };
+      if (!enableCourtGeometryV2) {
+        return { shot, ...mapShotToLegacyHitPoint(shot, width, svgHeight) };
+      }
+      const svgPoint = mapShotToCourtV2SvgPoint(shot);
+      return {
+        shot,
+        cx: svgPoint.cx * svgScale,
+        cy: svgPoint.cy * svgScale,
+      };
     });
-  }, [plottableShots, width, height]);
+  }, [plottableShots, enableCourtGeometryV2, width, svgHeight, svgScale]);
 
   const handleShotPress = useCallback((shot: CanonicalShotEvent) => {
     if (onShotPress) {
@@ -34,34 +201,14 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
     }
   }, [onShotPress]);
 
-  const svgScale = width / 500;
-  const svgHeight = 470 * svgScale;
-
   return (
     <View style={styles.container}>
       <View style={[styles.courtContainer, { width, height: svgHeight }]}>
         <Svg width={width} height={svgHeight} viewBox="0 0 500 470">
-          <Rect x="0" y="0" width="500" height="470" fill={Colors.surface} rx="8" />
-
-          <Rect x="30" y="0" width="440" height="470" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
-          <Rect x="170" y="0" width="160" height="190" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
-          <Circle cx="250" cy="190" r="60" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
-          <Rect x="200" y="0" width="100" height="60" fill="none" stroke={Colors.cardBorder} strokeWidth="1.5" />
-          <Circle cx="250" cy="60" r="6" fill={Colors.cardBorder} />
-
-          <Path
-            d="M 30 0 L 30 160 C 30 290 470 290 470 160 L 470 0"
-            fill="none"
-            stroke={Colors.cardBorder}
-            strokeWidth="1.5"
-            strokeDasharray="6 4"
-          />
-
-          <Line x1="30" y1="0" x2="470" y2="0" stroke={Colors.cardBorder} strokeWidth="2" />
+          {enableCourtGeometryV2 ? <CourtGeometryV2 /> : <LegacyCourtGeometry />}
 
           {plottableShots.map((shot) => {
-            const cx = (shot.x as number) * 440 + 30;
-            const cy = (shot.y as number) * 420 + 10;
+            const { cx, cy } = enableCourtGeometryV2 ? mapShotToCourtV2SvgPoint(shot) : mapShotToLegacySvgPoint(shot);
             const isMake = shot.result === 'make';
             const isSelected = selectedShotId === shot.id;
             return (
@@ -92,8 +239,6 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
         {onShotPress && (
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             {shotPositions.map(({ shot, cx, cy }) => {
-              const scaledCx = cx;
-              const scaledCy = cy;
               const hitSize = 28;
               return (
                 <TouchableOpacity
@@ -101,8 +246,8 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
                   style={[
                     styles.shotHitTarget,
                     {
-                      left: scaledCx - hitSize / 2,
-                      top: scaledCy - hitSize / 2,
+                      left: cx - hitSize / 2,
+                      top: cy - hitSize / 2,
                       width: hitSize,
                       height: hitSize,
                     },
