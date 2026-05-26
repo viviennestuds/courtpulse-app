@@ -281,7 +281,22 @@ function extractTeamStats(teamData: CdnBoxScoreTeam): Record<string, number> {
     pointsInThePaint: Number(stats.pointsInThePaint ?? 0),
   };
 
-  const pointsOffTurnovers = optionalNumberFromKeys(stats, ['pointsOffTurnovers', 'ptsOffTurnovers', 'pointsOffTov', 'ptsOffTov']);
+  const pointsOffTurnovers = optionalNumberFromKeys(stats, [
+    'pointsOffTurnovers',
+    'ptsOffTurnovers',
+    'pointsOffTov',
+    'ptsOffTov',
+    'pointsFromTurnovers',
+    'ptsFromTurnovers',
+    'pointsOffTO',
+    'ptsOffTO',
+    'turnoversPoints',
+    'pointsOffOpponentTurnovers',
+    'pointsFromOpponentTurnovers',
+    'opponentTurnoverPoints',
+    'pointsOffTOV',
+    'ptsOffTOV',
+  ]);
   const secondChancePoints = optionalNumberFromKeys(stats, ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance']);
   const benchPoints = optionalNumberFromKeys(stats, ['benchPoints', 'ptsBench', 'pointsBench']);
   if (pointsOffTurnovers !== undefined) mappedStats.pointsOffTurnovers = pointsOffTurnovers;
