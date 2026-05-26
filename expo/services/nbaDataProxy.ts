@@ -103,6 +103,11 @@ export interface NbaPlayByPlayProxyResponse extends NbaDataProxyBaseResponse {
 
 export interface NbaPlayoffCatalogProxyResponse extends NbaDataProxyBaseResponse {
   type: 'playoffCatalog';
+  source?: string;
+  playoffGameCount?: number;
+  seriesCount?: number;
+  games?: unknown[];
+  series?: unknown[];
   data?: unknown;
 }
 

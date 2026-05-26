@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Activity, ChevronRight, Trophy, Users, FlaskConical, WifiOff, CalendarDays } from 'lucide-react-native';
+import { Activity, ChevronRight, Trophy, Users, FlaskConical, WifiOff, CalendarDays, GitFork } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import GameCard from '@/components/GameCard';
@@ -25,6 +25,7 @@ export default function GamesScreen() {
   const dateRailEnabled = useFeatureFlag('games_date_rail_enabled');
   const calendarModalEnabled = useFeatureFlag('games_calendar_modal_enabled');
   const sourceBadgesEnabled = useFeatureFlag('games_source_badges_enabled');
+  const playoffBracketEnabled = useFeatureFlag('enablePlayoffBracketV1');
 
   const today = useMemo(() => getTodayDateString(), []);
   const [selectedDate, setSelectedDate] = useState<string>(today);
@@ -39,11 +40,12 @@ export default function GamesScreen() {
         setSelectedDate={setSelectedDate}
         calendarModalEnabled={calendarModalEnabled}
         sourceBadgesEnabled={sourceBadgesEnabled}
+        playoffBracketEnabled={playoffBracketEnabled}
       />
     );
   }
 
-  return <LegacyGames insets={insets} router={router} sourceBadgesEnabled={sourceBadgesEnabled} />;
+  return <LegacyGames insets={insets} router={router} sourceBadgesEnabled={sourceBadgesEnabled} playoffBracketEnabled={playoffBracketEnabled} />;
 }
 
 interface DateDrivenProps {
@@ -54,9 +56,10 @@ interface DateDrivenProps {
   setSelectedDate: (d: string) => void;
   calendarModalEnabled: boolean;
   sourceBadgesEnabled: boolean;
+  playoffBracketEnabled: boolean;
 }
 
-function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate, calendarModalEnabled, sourceBadgesEnabled }: DateDrivenProps) {
+function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate, calendarModalEnabled, sourceBadgesEnabled, playoffBracketEnabled }: DateDrivenProps) {
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
   useFeedbackContext({ screen: 'Games', filters: { selectedDate } });
   const {
@@ -174,6 +177,8 @@ function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate,
           <FeedbackButton variant="pill" type="ux_feedback" label="Send Feedback" testID="games-send-feedback" />
         </View>
 
+        {playoffBracketEnabled && <PlayoffsEntry onPress={() => router.push('/playoffs')} />}
+
         <View style={styles.quickLinks}>
           <TouchableOpacity style={styles.quickLink} onPress={() => router.push('/(tabs)/teams')} activeOpacity={0.7}>
             <Trophy size={18} color={Colors.warning} />
@@ -249,9 +254,10 @@ interface LegacyProps {
   insets: { top: number };
   router: ReturnType<typeof useRouter>;
   sourceBadgesEnabled: boolean;
+  playoffBracketEnabled: boolean;
 }
 
-function LegacyGames({ insets, router, sourceBadgesEnabled }: LegacyProps) {
+function LegacyGames({ insets, router, sourceBadgesEnabled, playoffBracketEnabled }: LegacyProps) {
   const [segment, setSegment] = useState(0);
   const {
     todayGames,
@@ -338,6 +344,8 @@ function LegacyGames({ insets, router, sourceBadgesEnabled }: LegacyProps) {
           </View>
         )}
 
+        {playoffBracketEnabled && <PlayoffsEntry onPress={() => router.push('/playoffs')} />}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Scoreboard</Text>
           <SegmentControl segments={LEGACY_SEGMENTS} selected={segment} onSelect={setSegment} />
@@ -363,6 +371,25 @@ function LegacyGames({ insets, router, sourceBadgesEnabled }: LegacyProps) {
         )}
       </ScrollView>
     </View>
+  );
+}
+
+interface PlayoffsEntryProps {
+  onPress: () => void;
+}
+
+function PlayoffsEntry({ onPress }: PlayoffsEntryProps) {
+  return (
+    <TouchableOpacity style={styles.playoffsEntry} onPress={onPress} activeOpacity={0.76} accessibilityRole="button" accessibilityLabel="Open Playoff Bracket">
+      <View style={styles.playoffsIconWrap}>
+        <GitFork size={18} color={Colors.secondary} />
+      </View>
+      <View style={styles.playoffsCopy}>
+        <Text style={styles.playoffsTitle}>Playoff Bracket</Text>
+        <Text style={styles.playoffsSubtitle}>Series tree, scores, and outcomes</Text>
+      </View>
+      <Text style={styles.playoffsCta}>Open →</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -482,6 +509,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     marginBottom: Spacing.md,
+  },
+  playoffsEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: Colors.cardBg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  playoffsIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.secondaryMuted,
+  },
+  playoffsCopy: {
+    flex: 1,
+  },
+  playoffsTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+  },
+  playoffsSubtitle: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    marginTop: 2,
+  },
+  playoffsCta: {
+    color: Colors.secondary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.4,
   },
   quickLinks: {
     flexDirection: 'row',

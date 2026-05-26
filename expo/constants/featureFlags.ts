@@ -161,6 +161,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     defaultEnabled: false,
   },
   {
+    key: 'enablePlayoffBracketV1',
+    label: 'Playoff Bracket V1',
+    description: 'Show a Phase 1 Playoff Bracket entry point and mobile playoff tree built from existing NBA schedule metadata.',
+    channel: 'experimental',
+    defaultEnabled: false,
+  },
+  {
     key: 'player_performance_screen_enabled',
     label: 'Player Performance Screen',
     description: 'Tap a player row in the box score to view individual player performance breakdown',

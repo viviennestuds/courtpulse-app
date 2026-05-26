@@ -34,6 +34,13 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="playoffs"
+        options={{
+          headerShown: false,
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
         name="team/[id]"
         options={{
           title: "",
