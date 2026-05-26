@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Film, Info, Flame, Target, Activity, Zap, ChevronDown, ArrowLeftRight, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
-import { BoxScorePlayer, Team, Player } from '@/types';
+import { BoxScorePlayer, Team, Player, ScoringRun } from '@/types';
 import { useTeams, usePlayers, useGameMatchups } from '@/hooks/useNbaData';
 import type { CdnPbpAction, GameMatchupRow } from '@/services/nbaGameData';
 import {
@@ -12,6 +12,7 @@ import {
   getSeasonFromGameId,
   getSeasonTypeFromGameId,
 } from '@/utils/nbaGameSeason';
+import { buildMatchupGameDrivers } from '@/utils/matchupDrivers';
 
 interface TeamSide {
   id: string;
@@ -33,6 +34,7 @@ interface MatchupRealDataTabProps {
   status: GameStatus;
   rawActions?: CdnPbpAction[];
   gameId?: string;
+  runs?: ScoringRun[];
 }
 
 type EdgeDirection = 'home' | 'away' | 'neutral';
@@ -128,6 +130,7 @@ export default React.memo(function MatchupRealDataTab({
   status,
   rawActions,
   gameId,
+  runs,
 }: MatchupRealDataTabProps) {
   const isPreGame = status === 'scheduled';
   const isLiveOrFinal = status === 'live' || status === 'final';
@@ -168,6 +171,7 @@ export default React.memo(function MatchupRealDataTab({
         awayBoxScore={awayBoxScore}
         rawActions={rawActions}
         gameId={gameId}
+        runs={runs}
       />
     );
   }
@@ -417,6 +421,7 @@ function GameStoryView({
   awayBoxScore,
   rawActions,
   gameId,
+  runs,
 }: {
   status: GameStatus;
   homeTeam: TeamSide;
@@ -427,6 +432,7 @@ function GameStoryView({
   awayBoxScore: BoxScorePlayer[];
   rawActions?: CdnPbpAction[];
   gameId?: string;
+  runs?: ScoringRun[];
 }) {
   const hasTeamStats = Object.keys(homeTeamStats).length > 1 && Object.keys(awayTeamStats).length > 1;
   const hasBoxScores = homeBoxScore.length > 0 && awayBoxScore.length > 0;
@@ -474,67 +480,14 @@ function GameStoryView({
 
   const drivers: DriverNote[] = useMemo(() => {
     if (!hasTeamStats) return [];
-    const notes: DriverNote[] = [];
-
-    const homeEfg = efgPct(homeTeamStats);
-    const awayEfg = efgPct(awayTeamStats);
-    if (Math.abs(homeEfg - awayEfg) >= 3) {
-      const winner = homeEfg > awayEfg ? homeTeam.abbreviation : awayTeam.abbreviation;
-      const loser = homeEfg > awayEfg ? awayTeam.abbreviation : homeTeam.abbreviation;
-      notes.push({
-        id: 'efg',
-        body: `${winner} won the shooting battle (eFG% ${Math.max(homeEfg, awayEfg).toFixed(1)}% vs ${Math.min(homeEfg, awayEfg).toFixed(1)}%) — that efficiency gap pressured ${loser} to find points elsewhere.`,
-      });
-    }
-
-    const homeOreb = homeTeamStats.reboundsOffensive ?? 0;
-    const awayOreb = awayTeamStats.reboundsOffensive ?? 0;
-    const homeTov = homeTeamStats.turnovers ?? 0;
-    const awayTov = awayTeamStats.turnovers ?? 0;
-    const homePoss = homeOreb - homeTov;
-    const awayPoss = awayOreb - awayTov;
-    if (Math.abs(homePoss - awayPoss) >= 3) {
-      const winner = homePoss > awayPoss ? homeTeam.abbreviation : awayTeam.abbreviation;
-      notes.push({
-        id: 'poss',
-        body: `${winner} won the possession battle (OREB ${Math.max(homeOreb, awayOreb)} vs ${Math.min(homeOreb, awayOreb)}, TOV ${Math.min(homeTov, awayTov)} vs ${Math.max(homeTov, awayTov)}) — extra trips translated into more shot opportunities.`,
-      });
-    }
-
-    const home3pa = homeTeamStats.threePointersAttempted ?? 0;
-    const away3pa = awayTeamStats.threePointersAttempted ?? 0;
-    const home3pPct = homeTeamStats.threePointersPercentage ?? 0;
-    const away3pPct = awayTeamStats.threePointersPercentage ?? 0;
-    if (Math.abs(home3pPct - away3pPct) >= 5 && (home3pa >= 10 || away3pa >= 10)) {
-      const winner = home3pPct > away3pPct ? homeTeam.abbreviation : awayTeam.abbreviation;
-      notes.push({
-        id: '3pt',
-        body: `${winner} got the perimeter advantage (3PT% ${Math.max(home3pPct, away3pPct).toFixed(1)}% vs ${Math.min(home3pPct, away3pPct).toFixed(1)}%) which stretched the floor and forced defensive rotations.`,
-      });
-    }
-
-    const homeFta = homeTeamStats.freeThrowsAttempted ?? 0;
-    const awayFta = awayTeamStats.freeThrowsAttempted ?? 0;
-    if (Math.abs(homeFta - awayFta) >= 6) {
-      const winner = homeFta > awayFta ? homeTeam.abbreviation : awayTeam.abbreviation;
-      notes.push({
-        id: 'ft',
-        body: `${winner} generated more free-throw pressure (FTA ${Math.max(homeFta, awayFta)} vs ${Math.min(homeFta, awayFta)}), keeping the opposing defense in foul trouble.`,
-      });
-    }
-
-    const homeAst = homeTeamStats.assists ?? 0;
-    const awayAst = awayTeamStats.assists ?? 0;
-    if (notes.length < 4 && Math.abs(homeAst - awayAst) >= 4) {
-      const winner = homeAst > awayAst ? homeTeam.abbreviation : awayTeam.abbreviation;
-      notes.push({
-        id: 'ast',
-        body: `${winner} created higher-quality looks (AST ${Math.max(homeAst, awayAst)} vs ${Math.min(homeAst, awayAst)}) — better ball movement led to more open shots.`,
-      });
-    }
-
-    return notes.slice(0, 4);
-  }, [hasTeamStats, homeTeamStats, awayTeamStats, homeTeam.abbreviation, awayTeam.abbreviation]);
+    return buildMatchupGameDrivers({
+      homeTeam,
+      awayTeam,
+      homeTeamStats,
+      awayTeamStats,
+      runs,
+    });
+  }, [hasTeamStats, homeTeamStats, awayTeamStats, homeTeam, awayTeam, runs]);
 
   const homeEngines = useMemo(() => {
     return [...homeBoxScore]
@@ -699,14 +652,25 @@ function BoxEngineCard({ player, color, teamAbbr }: { player: BoxScorePlayer; co
         <EngineStat label="FG%" value={player.fga > 0 ? `${fgPct.toFixed(0)}%` : '—'} />
         <EngineStat label="+/-" value={player.plusMinus > 0 ? `+${player.plusMinus}` : `${player.plusMinus}`} />
       </View>
-      {(player.steals > 0 || player.blocks > 0) && (
-        <Text style={styles.engineFootnote}>
-          {player.steals > 0 ? `${player.steals} STL ` : ''}
-          {player.blocks > 0 ? `${player.blocks} BLK` : ''}
-        </Text>
-      )}
+      {buildBoxEngineContext(player) ? (
+        <Text style={styles.engineFootnote}>{buildBoxEngineContext(player)}</Text>
+      ) : null}
     </View>
   );
+}
+
+function buildBoxEngineContext(player: BoxScorePlayer): string {
+  const tags: string[] = [];
+  if (player.pointsInThePaint !== undefined && player.pointsInThePaint >= 10) tags.push(`${player.pointsInThePaint} paint pts`);
+  if (player.pointsFastBreak !== undefined && player.pointsFastBreak >= 6) tags.push(`${player.pointsFastBreak} fast break pts`);
+  if (player.pointsSecondChance !== undefined && player.pointsSecondChance >= 6) tags.push(`${player.pointsSecondChance} 2nd chance pts`);
+  if (player.personalFoulsDrawn !== undefined && player.personalFoulsDrawn >= 5) tags.push(`${player.personalFoulsDrawn} fouls drawn`);
+  if (player.blockedAttempts !== undefined && player.blockedAttempts >= 3) tags.push(`${player.blockedAttempts} attempts blocked`);
+  if (tags.length === 0) {
+    if (player.steals > 0) tags.push(`${player.steals} STL`);
+    if (player.blocks > 0) tags.push(`${player.blocks} BLK`);
+  }
+  return tags.slice(0, 2).join(' · ');
 }
 
 function EngineStat({ label, value, subValue, subLabel }: { label: string; value: string; subValue?: string; subLabel?: string }) {

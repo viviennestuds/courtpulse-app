@@ -412,6 +412,7 @@ export default function GameDetailScreen() {
                 status={game.status}
                 rawActions={rawActions}
                 gameId={id}
+                runs={analytics.runs}
               />
             </View>
           ) : (
