@@ -1,6 +1,7 @@
 import { BoxScorePlayer, PlayByPlayEvent, ShotEvent, Game } from '@/types';
 import { fetchNbaCdn, fetchNbaStats, parsePTClock, parsePTMinutes, parsePTToSeconds, getGameStatus, getPeriodText, getStatusClockText } from './nbaApi';
 import { getTeamInfoById } from '@/constants/nbaTeams';
+import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
 
 interface CdnBoxScoreResponse {
   game: CdnBoxScoreGame;
@@ -139,6 +140,7 @@ function transformBoxScorePlayer(p: CdnBoxScorePlayer): BoxScorePlayer {
     fta: stats.freeThrowsAttempted,
     plusMinus: stats.plusMinusPoints,
     isStarter: p.starter === '1',
+    ...normalizePlayerBoxScoreMiscStats(stats),
   };
 }
 
@@ -234,20 +236,6 @@ function transformShotFromAction(action: CdnPbpAction): ShotEvent | null {
   };
 }
 
-function optionalNumberFromKeys(source: Record<string, number | string>, keys: string[]): number | undefined {
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      const value = source[key];
-      if (typeof value === 'number' && Number.isFinite(value)) return value;
-      if (typeof value === 'string' && value.trim()) {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) return parsed;
-      }
-    }
-  }
-  return undefined;
-}
-
 function extractTeamStats(teamData: CdnBoxScoreTeam): Record<string, number> {
   const stats = teamData.statistics;
   const oreb = Number(stats.reboundsOffensive ?? 0);
@@ -281,29 +269,10 @@ function extractTeamStats(teamData: CdnBoxScoreTeam): Record<string, number> {
     pointsInThePaint: Number(stats.pointsInThePaint ?? 0),
   };
 
-  const pointsOffTurnovers = optionalNumberFromKeys(stats, [
-    'pointsOffTurnovers',
-    'ptsOffTurnovers',
-    'pointsOffTov',
-    'ptsOffTov',
-    'pointsFromTurnovers',
-    'ptsFromTurnovers',
-    'pointsOffTO',
-    'ptsOffTO',
-    'turnoversPoints',
-    'pointsOffOpponentTurnovers',
-    'pointsFromOpponentTurnovers',
-    'opponentTurnoverPoints',
-    'pointsOffTOV',
-    'ptsOffTOV',
-  ]);
-  const secondChancePoints = optionalNumberFromKeys(stats, ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance']);
-  const benchPoints = optionalNumberFromKeys(stats, ['benchPoints', 'ptsBench', 'pointsBench']);
-  if (pointsOffTurnovers !== undefined) mappedStats.pointsOffTurnovers = pointsOffTurnovers;
-  if (secondChancePoints !== undefined) mappedStats.pointsSecondChance = secondChancePoints;
-  if (benchPoints !== undefined) mappedStats.benchPoints = benchPoints;
-
-  return mappedStats;
+  return {
+    ...mappedStats,
+    ...normalizeTeamBoxScoreMiscStats(stats),
+  };
 }
 
 export async function fetchGameBoxScore(gameId: string): Promise<GameDetailData> {

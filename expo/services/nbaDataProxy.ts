@@ -10,6 +10,7 @@ import {
   parsePTToSeconds,
 } from './nbaApi';
 import type { CdnPbpAction, GameDetailData } from './nbaGameData';
+import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
 
 const NBA_DATA_PROXY_BASE_URL = 'https://gikxqfkzmwcujkndoizr.supabase.co/functions/v1/nba-data-proxy';
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -234,20 +235,6 @@ function toNumber(value: unknown, fallback: number = 0): number {
   return fallback;
 }
 
-function optionalNumberFromKeys(source: Record<string, unknown>, keys: string[]): number | undefined {
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      const value = source[key];
-      if (typeof value === 'number' && Number.isFinite(value)) return value;
-      if (typeof value === 'string' && value.trim()) {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) return parsed;
-      }
-    }
-  }
-  return undefined;
-}
-
 function toStringValue(value: unknown, fallback: string = ''): string {
   if (value === null || value === undefined) return fallback;
   return String(value);
@@ -338,6 +325,7 @@ function transformBoxScorePlayer(player: ProxyBoxScorePlayerShape): BoxScorePlay
     fta: toNumber(stats.freeThrowsAttempted),
     plusMinus: toNumber(stats.plusMinusPoints),
     isStarter: String(player.starter ?? '') === '1',
+    ...normalizePlayerBoxScoreMiscStats(stats),
   };
 }
 
@@ -380,29 +368,10 @@ function extractTeamStats(team: ProxyTeamShape | null | undefined): Record<strin
     pointsInThePaint: toNumber(stats.pointsInThePaint),
   };
 
-  const pointsOffTurnovers = optionalNumberFromKeys(stats, [
-    'pointsOffTurnovers',
-    'ptsOffTurnovers',
-    'pointsOffTov',
-    'ptsOffTov',
-    'pointsFromTurnovers',
-    'ptsFromTurnovers',
-    'pointsOffTO',
-    'ptsOffTO',
-    'turnoversPoints',
-    'pointsOffOpponentTurnovers',
-    'pointsFromOpponentTurnovers',
-    'opponentTurnoverPoints',
-    'pointsOffTOV',
-    'ptsOffTOV',
-  ]);
-  const secondChancePoints = optionalNumberFromKeys(stats, ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance']);
-  const benchPoints = optionalNumberFromKeys(stats, ['benchPoints', 'ptsBench', 'pointsBench']);
-  if (pointsOffTurnovers !== undefined) mappedStats.pointsOffTurnovers = pointsOffTurnovers;
-  if (secondChancePoints !== undefined) mappedStats.pointsSecondChance = secondChancePoints;
-  if (benchPoints !== undefined) mappedStats.benchPoints = benchPoints;
-
-  return mappedStats;
+  return {
+    ...mappedStats,
+    ...normalizeTeamBoxScoreMiscStats(stats),
+  };
 }
 
 function normalizePbpAction(action: ProxyPbpActionShape): CdnPbpAction {

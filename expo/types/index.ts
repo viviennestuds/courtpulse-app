@@ -93,6 +93,11 @@ export interface BoxScorePlayer {
   fta: number;
   plusMinus: number;
   isStarter: boolean;
+  pointsFastBreak?: number;
+  pointsInThePaint?: number;
+  pointsSecondChance?: number;
+  personalFoulsDrawn?: number;
+  blockedAttempts?: number;
 }
 
 export interface PlayByPlayEvent {
