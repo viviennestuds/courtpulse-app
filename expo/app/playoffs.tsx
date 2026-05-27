@@ -10,14 +10,58 @@ import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { getPlayoffCatalog } from '@/services/nbaDataProxy';
 import { buildPlayoffBracket, PlayoffBracketRound, PlayoffCatalogLike, PlayoffSeries, PlayoffSeriesGame, PlayoffTeamSlot } from '@/utils/playoffBracket';
 
-function hexToRgba(hex: string, alpha: number): string {
+interface RgbColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+const NEUTRAL_PLAYOFF_ACCENT = Colors.secondary;
+const CARD_BACKGROUND = Colors.cardBg;
+
+function parseHexColor(hex: string): RgbColor | null {
   const normalized = hex.replace('#', '');
-  if (normalized.length !== 6) return `rgba(59,130,246,${alpha})`;
+  if (normalized.length !== 6) return null;
   const r = parseInt(normalized.slice(0, 2), 16);
   const g = parseInt(normalized.slice(2, 4), 16);
   const b = parseInt(normalized.slice(4, 6), 16);
-  if (![r, g, b].every(Number.isFinite)) return `rgba(59,130,246,${alpha})`;
-  return `rgba(${r},${g},${b},${alpha})`;
+  return [r, g, b].every(Number.isFinite) ? { r, g, b } : null;
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const rgb = parseHexColor(hex);
+  if (!rgb) return `rgba(6,182,212,${alpha})`;
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+}
+
+function relativeLuminance(color: RgbColor): number {
+  const channel = (value: number): number => {
+    const srgb = value / 255;
+    return srgb <= 0.03928 ? srgb / 12.92 : Math.pow((srgb + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+}
+
+function contrastRatio(colorA: string, colorB: string): number {
+  const a = parseHexColor(colorA);
+  const b = parseHexColor(colorB);
+  if (!a || !b) return 0;
+  const light = Math.max(relativeLuminance(a), relativeLuminance(b));
+  const dark = Math.min(relativeLuminance(a), relativeLuminance(b));
+  return (light + 0.05) / (dark + 0.05);
+}
+
+function colorDistance(colorA: string, colorB: string): number {
+  const a = parseHexColor(colorA);
+  const b = parseHexColor(colorB);
+  if (!a || !b) return 0;
+  return Math.sqrt(Math.pow(a.r - b.r, 2) + Math.pow(a.g - b.g, 2) + Math.pow(a.b - b.b, 2));
+}
+
+function safePlayoffAccent(preferredColor: string, otherColor?: string): string {
+  const contrast = contrastRatio(preferredColor, CARD_BACKGROUND);
+  const tooSimilar = otherColor ? colorDistance(preferredColor, otherColor) < 54 : false;
+  return contrast < 2.15 || tooSimilar ? NEUTRAL_PLAYOFF_ACCENT : preferredColor;
 }
 
 function teamLabel(team: PlayoffTeamSlot): string {
@@ -40,6 +84,14 @@ function isTeamLoser(series: PlayoffSeries, team: PlayoffTeamSlot): boolean {
 
 function isTeamLeader(series: PlayoffSeries, team: PlayoffTeamSlot): boolean {
   return !series.isComplete && !team.isTbd && series.leaderAbbr === team.abbreviation;
+}
+
+function isGameTeamWinner(game: PlayoffSeriesGame, team: PlayoffTeamSlot): boolean {
+  return game.status === 'final' && !team.isTbd && game.winnerAbbr === team.abbreviation;
+}
+
+function isGameTeamLoser(game: PlayoffSeriesGame, team: PlayoffTeamSlot): boolean {
+  return game.status === 'final' && !!game.winnerAbbr && !team.isTbd && game.winnerAbbr !== team.abbreviation;
 }
 
 export default function PlayoffsScreen() {
@@ -186,18 +238,22 @@ interface SeriesCardProps {
 }
 
 function SeriesCard({ series, expanded, onToggle, onOpenGame }: SeriesCardProps) {
-  const accentBg = hexToRgba(series.accentColor, 0.15);
+  const winningTeam = [series.teamA, series.teamB].find(team => !team.isTbd && series.winnerAbbr === team.abbreviation);
+  const otherTeam = [series.teamA, series.teamB].find(team => !team.isTbd && series.winnerAbbr !== team.abbreviation);
+  const cardAccent = series.isComplete && winningTeam ? safePlayoffAccent(winningTeam.color, otherTeam?.color) : NEUTRAL_PLAYOFF_ACCENT;
+  const accentBg = hexToRgba(cardAccent, series.isComplete ? 0.15 : 0.08);
+  const borderColor = series.isComplete ? hexToRgba(cardAccent, 0.42) : Colors.cardBorder;
   return (
-    <View style={[styles.seriesCard, { borderColor: hexToRgba(series.accentColor, series.isComplete ? 0.42 : 0.24) }]}> 
+    <View style={[styles.seriesCard, { borderColor }]}> 
       <TouchableOpacity onPress={onToggle} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Toggle ${teamLabel(series.teamA)} versus ${teamLabel(series.teamB)} series`}>
         <View style={styles.seriesTopRow}>
-          <View style={[styles.seriesAccent, { backgroundColor: series.accentColor }]} />
+          <View style={[styles.seriesAccent, { backgroundColor: cardAccent, opacity: series.isComplete ? 1 : 0.55 }]} />
           <View style={styles.seriesSummaryWrap}>
             <Text style={styles.seriesMatchup}>{teamLabel(series.teamA)} / {teamLabel(series.teamB)}</Text>
             <Text style={styles.seriesSummary}>{series.summary}</Text>
           </View>
           <View style={[styles.seriesPill, { backgroundColor: accentBg }]}> 
-            <Text style={[styles.seriesPillText, { color: series.accentColor }]}>{series.isComplete ? 'FINAL' : 'SERIES'}</Text>
+            <Text style={[styles.seriesPillText, { color: series.isComplete ? cardAccent : Colors.textSecondary }]}>{series.isComplete ? 'FINAL' : 'SERIES'}</Text>
           </View>
           {expanded ? <ChevronDown size={18} color={Colors.textMuted} /> : <ChevronRight size={18} color={Colors.textMuted} />}
         </View>
@@ -232,9 +288,9 @@ function SeriesTeamRow({ series, team, wins }: SeriesTeamRowProps) {
   return (
     <View style={styles.teamRow}>
       <View style={[styles.teamDot, { backgroundColor: team.color, opacity: team.isTbd ? 0.45 : 1 }]} />
-      <Text style={[styles.teamAbbr, (winner || leader) && styles.teamStrong, loser && styles.teamMuted]}>{teamLabel(team)}</Text>
+      <Text style={[styles.teamAbbr, winner && styles.teamStrong, leader && styles.teamLeader, loser && styles.teamMuted]}>{teamLabel(team)}</Text>
       <Text style={[styles.teamName, loser && styles.teamMuted]} numberOfLines={1}>{fullTeamLabel(team)}</Text>
-      <Text style={[styles.teamWins, (winner || leader) && styles.teamStrong, loser && styles.teamMuted]}>{wins ?? '—'}</Text>
+      <Text style={[styles.teamWins, winner && styles.teamStrong, leader && styles.teamLeader, loser && styles.teamMuted]}>{wins ?? '—'}</Text>
     </View>
   );
 }
@@ -246,9 +302,10 @@ interface GameRowProps {
 
 function GameRow({ game, onOpenGame }: GameRowProps) {
   const isFinal = game.status === 'final';
-  const scoreText = isFinal && game.awayScore !== undefined && game.homeScore !== undefined
-    ? `${game.awayScore}–${game.homeScore}`
-    : game.statusText;
+  const hasScore = isFinal && game.awayScore !== undefined && game.homeScore !== undefined;
+  const winningTeam = [game.awayTeam, game.homeTeam].find(team => isGameTeamWinner(game, team));
+  const losingTeam = [game.awayTeam, game.homeTeam].find(team => isGameTeamLoser(game, team));
+  const rowAccent = winningTeam ? safePlayoffAccent(winningTeam.color, losingTeam?.color) : NEUTRAL_PLAYOFF_ACCENT;
   const content = (
     <View style={styles.gameRowInner}>
       <View style={styles.gameMetaCol}>
@@ -259,7 +316,18 @@ function GameRow({ game, onOpenGame }: GameRowProps) {
         <Text style={styles.gameMatchup} numberOfLines={1}>{teamLabel(game.awayTeam)} @ {teamLabel(game.homeTeam)}</Text>
         <Text style={styles.gameStatus} numberOfLines={1}>{game.status === 'scheduled' ? game.statusText : game.status.toUpperCase()}</Text>
       </View>
-      <Text style={[styles.gameScore, isFinal && styles.gameScoreFinal]}>{scoreText}</Text>
+      {hasScore ? (
+        <View style={styles.gameScoreStack}>
+          <Text style={[styles.gameScoreLine, isGameTeamWinner(game, game.awayTeam) && styles.gameScoreWinner, isGameTeamLoser(game, game.awayTeam) && styles.gameScoreLoser, isGameTeamWinner(game, game.awayTeam) && { color: rowAccent }]} numberOfLines={1}>
+            {teamLabel(game.awayTeam)} {game.awayScore}
+          </Text>
+          <Text style={[styles.gameScoreLine, isGameTeamWinner(game, game.homeTeam) && styles.gameScoreWinner, isGameTeamLoser(game, game.homeTeam) && styles.gameScoreLoser, isGameTeamWinner(game, game.homeTeam) && { color: rowAccent }]} numberOfLines={1}>
+            {teamLabel(game.homeTeam)} {game.homeScore}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.gameScore}>{game.statusText}</Text>
+      )}
     </View>
   );
 
@@ -484,6 +552,9 @@ const styles = StyleSheet.create({
   teamStrong: {
     color: Colors.textPrimary,
   },
+  teamLeader: {
+    color: Colors.textSecondary,
+  },
   teamMuted: {
     color: Colors.textMuted,
     opacity: 0.58,
@@ -541,9 +612,23 @@ const styles = StyleSheet.create({
     maxWidth: 86,
     textAlign: 'right',
   },
-  gameScoreFinal: {
+  gameScoreStack: {
+    minWidth: 64,
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  gameScoreLine: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    textAlign: 'right',
+  },
+  gameScoreWinner: {
     color: Colors.textPrimary,
-    fontSize: FontSize.md,
     fontWeight: FontWeight.bold,
+  },
+  gameScoreLoser: {
+    color: Colors.textMuted,
+    opacity: 0.64,
   },
 });
