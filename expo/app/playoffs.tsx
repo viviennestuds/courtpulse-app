@@ -16,7 +16,9 @@ interface RgbColor {
   b: number;
 }
 
-const NEUTRAL_PLAYOFF_ACCENT = Colors.secondary;
+const NEUTRAL_PLAYOFF_ACCENT = Colors.textSecondary;
+const NEUTRAL_PLAYOFF_ACCENT_MUTED = 'rgba(148,163,184,0.12)';
+const FINALS_PLAYOFF_ACCENT = Colors.warning;
 const CARD_BACKGROUND = Colors.cardBg;
 
 function parseHexColor(hex: string): RgbColor | null {
@@ -30,7 +32,7 @@ function parseHexColor(hex: string): RgbColor | null {
 
 function hexToRgba(hex: string, alpha: number): string {
   const rgb = parseHexColor(hex);
-  if (!rgb) return `rgba(6,182,212,${alpha})`;
+  if (!rgb) return `rgba(148,163,184,${alpha})`;
   return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
 }
 
@@ -61,7 +63,11 @@ function colorDistance(colorA: string, colorB: string): number {
 function safePlayoffAccent(preferredColor: string, otherColor?: string): string {
   const contrast = contrastRatio(preferredColor, CARD_BACKGROUND);
   const tooSimilar = otherColor ? colorDistance(preferredColor, otherColor) < 54 : false;
-  return contrast < 2.15 || tooSimilar ? NEUTRAL_PLAYOFF_ACCENT : preferredColor;
+  return contrast < 2.15 || tooSimilar ? Colors.textPrimary : preferredColor;
+}
+
+function isFinalsSeries(series: PlayoffSeries): boolean {
+  return series.roundOrder === 4 || series.roundLabel.toLowerCase().includes('finals');
 }
 
 function teamLabel(team: PlayoffTeamSlot): string {
@@ -253,11 +259,10 @@ interface SeriesCardProps {
 }
 
 function SeriesCard({ series, expanded, onToggle, onOpenGame }: SeriesCardProps) {
-  const winningTeam = [series.teamA, series.teamB].find(team => !team.isTbd && series.winnerAbbr === team.abbreviation);
-  const otherTeam = [series.teamA, series.teamB].find(team => !team.isTbd && series.winnerAbbr !== team.abbreviation);
-  const cardAccent = series.isComplete && winningTeam ? safePlayoffAccent(winningTeam.color, otherTeam?.color) : NEUTRAL_PLAYOFF_ACCENT;
-  const accentBg = hexToRgba(cardAccent, series.isComplete ? 0.15 : 0.08);
-  const borderColor = series.isComplete ? hexToRgba(cardAccent, 0.42) : Colors.cardBorder;
+  const isFinals = isFinalsSeries(series);
+  const cardAccent = isFinals ? FINALS_PLAYOFF_ACCENT : NEUTRAL_PLAYOFF_ACCENT;
+  const accentBg = isFinals ? Colors.warningMuted : NEUTRAL_PLAYOFF_ACCENT_MUTED;
+  const borderColor = isFinals ? hexToRgba(FINALS_PLAYOFF_ACCENT, series.isComplete ? 0.34 : 0.22) : Colors.cardBorder;
   return (
     <View style={[styles.seriesCard, { borderColor }]}> 
       <TouchableOpacity onPress={onToggle} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Toggle ${teamLabel(series.teamA)} versus ${teamLabel(series.teamB)} series`}>
@@ -268,7 +273,7 @@ function SeriesCard({ series, expanded, onToggle, onOpenGame }: SeriesCardProps)
             <Text style={styles.seriesSummary}>{series.summary}</Text>
           </View>
           <View style={[styles.seriesPill, { backgroundColor: accentBg }]}> 
-            <Text style={[styles.seriesPillText, { color: series.isComplete ? cardAccent : Colors.textSecondary }]}>{series.isComplete ? 'FINAL' : 'SERIES'}</Text>
+            <Text style={[styles.seriesPillText, { color: isFinals ? cardAccent : Colors.textSecondary }]}>{series.isComplete ? 'FINAL' : 'SERIES'}</Text>
           </View>
           {expanded ? <ChevronDown size={18} color={Colors.textMuted} /> : <ChevronRight size={18} color={Colors.textMuted} />}
         </View>
