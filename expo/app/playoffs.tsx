@@ -8,7 +8,7 @@ import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { getPlayoffCatalog } from '@/services/nbaDataProxy';
-import { buildPlayoffBracket, PlayoffBracketRound, PlayoffCatalogLike, PlayoffSeries, PlayoffSeriesGame, PlayoffTeamSlot } from '@/utils/playoffBracket';
+import { buildPlayoffBracket, PlayoffBracketRound, PlayoffCatalogLike, PlayoffConference, PlayoffSeries, PlayoffSeriesGame, PlayoffTeamSlot } from '@/utils/playoffBracket';
 
 interface RgbColor {
   r: number;
@@ -20,6 +20,23 @@ const NEUTRAL_PLAYOFF_ACCENT = Colors.textSecondary;
 const NEUTRAL_PLAYOFF_ACCENT_MUTED = 'rgba(148,163,184,0.12)';
 const FINALS_PLAYOFF_ACCENT = Colors.warning;
 const CARD_BACKGROUND = Colors.cardBg;
+
+type ConferenceScope = 'All' | PlayoffConference;
+type RoundScope = 'All' | 1 | 2 | 3 | 4;
+
+const CONFERENCE_FILTERS: { label: string; value: ConferenceScope }[] = [
+  { label: 'All', value: 'All' },
+  { label: 'East', value: 'East' },
+  { label: 'West', value: 'West' },
+];
+
+const ROUND_FILTERS: { label: string; value: RoundScope }[] = [
+  { label: 'All Rounds', value: 'All' },
+  { label: 'Round 1', value: 1 },
+  { label: 'Conf Semis', value: 2 },
+  { label: 'Conf Finals', value: 3 },
+  { label: 'NBA Finals', value: 4 },
+];
 
 function parseHexColor(hex: string): RgbColor | null {
   const normalized = hex.replace('#', '');
@@ -66,8 +83,13 @@ function safePlayoffAccent(preferredColor: string, otherColor?: string): string 
   return contrast < 2.15 || tooSimilar ? Colors.textPrimary : preferredColor;
 }
 
+function isNbaFinalsRound(roundOrder: number, roundLabel: string): boolean {
+  const normalizedLabel = roundLabel.trim().toLowerCase().replace(/\s+/g, ' ');
+  return roundOrder === 4 || normalizedLabel === 'nba finals' || normalizedLabel === 'finals';
+}
+
 function isFinalsSeries(series: PlayoffSeries): boolean {
-  return series.roundOrder === 4 || series.roundLabel.toLowerCase().includes('finals');
+  return isNbaFinalsRound(series.roundOrder, series.roundLabel);
 }
 
 function teamLabel(team: PlayoffTeamSlot): string {
@@ -115,11 +137,81 @@ function playoffSummaryText(seriesCount: number, completedGameCount: number, liv
   return parts.join(' · ');
 }
 
+function hasLiveGame(series: PlayoffSeries): boolean {
+  return series.games.some(game => game.status === 'live');
+}
+
+function hasFinalGame(series: PlayoffSeries): boolean {
+  return series.games.some(game => game.status === 'final');
+}
+
+function hasScheduledGame(series: PlayoffSeries): boolean {
+  return series.games.some(game => game.status === 'scheduled');
+}
+
+function seriesDisplayPriority(series: PlayoffSeries): number {
+  if (hasLiveGame(series)) return 0;
+  if (!series.isComplete && hasFinalGame(series)) return 1;
+  if (!series.isComplete && hasScheduledGame(series)) return 2;
+  if (series.isComplete) return 3;
+  return 4;
+}
+
+function conferenceSortValue(conference?: PlayoffConference): number {
+  if (conference === 'East') return 0;
+  if (conference === 'West') return 1;
+  return 2;
+}
+
+function compareSeriesForDisplay(a: PlayoffSeries, b: PlayoffSeries): number {
+  const priorityDiff = seriesDisplayPriority(a) - seriesDisplayPriority(b);
+  if (priorityDiff !== 0) return priorityDiff;
+  const roundDiff = b.roundOrder - a.roundOrder;
+  if (roundDiff !== 0) return roundDiff;
+  const conferenceDiff = conferenceSortValue(a.conference) - conferenceSortValue(b.conference);
+  if (conferenceDiff !== 0) return conferenceDiff;
+  return a.id.localeCompare(b.id);
+}
+
+function roundDisplayPriority(round: PlayoffBracketRound): number {
+  return Math.min(...round.series.map(seriesDisplayPriority));
+}
+
+function compareRoundsForDisplay(a: PlayoffBracketRound, b: PlayoffBracketRound): number {
+  const priorityDiff = roundDisplayPriority(a) - roundDisplayPriority(b);
+  if (priorityDiff !== 0) return priorityDiff;
+  const roundDiff = b.order - a.order;
+  if (roundDiff !== 0) return roundDiff;
+  const conferenceDiff = conferenceSortValue(a.conference) - conferenceSortValue(b.conference);
+  if (conferenceDiff !== 0) return conferenceDiff;
+  return a.id.localeCompare(b.id);
+}
+
+function seriesMatchesFilters(series: PlayoffSeries, conferenceScope: ConferenceScope, roundScope: RoundScope): boolean {
+  const matchesConference = conferenceScope === 'All' || series.conference === conferenceScope;
+  const matchesRound = roundScope === 'All' || series.roundOrder === roundScope;
+  return matchesConference && matchesRound;
+}
+
+function filterAndOrderRounds(rounds: PlayoffBracketRound[], conferenceScope: ConferenceScope, roundScope: RoundScope): PlayoffBracketRound[] {
+  return rounds
+    .map(round => ({
+      ...round,
+      series: round.series
+        .filter(series => seriesMatchesFilters(series, conferenceScope, roundScope))
+        .sort(compareSeriesForDisplay),
+    }))
+    .filter(round => round.series.length > 0)
+    .sort(compareRoundsForDisplay);
+}
+
 export default function PlayoffsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const enabled = useFeatureFlag('enablePlayoffBracketV1');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [conferenceScope, setConferenceScope] = useState<ConferenceScope>('All');
+  const [roundScope, setRoundScope] = useState<RoundScope>('All');
 
   const query = useQuery({
     queryKey: ['playoffCatalog'],
@@ -131,6 +223,11 @@ export default function PlayoffsScreen() {
   });
 
   const bracket = useMemo(() => buildPlayoffBracket(query.data as PlayoffCatalogLike | undefined), [query.data]);
+  const displayRounds = useMemo(
+    () => filterAndOrderRounds(bracket.rounds, conferenceScope, roundScope),
+    [bracket.rounds, conferenceScope, roundScope]
+  );
+  const hasActiveFilters = conferenceScope !== 'All' || roundScope !== 'All';
 
   const toggleSeries = useCallback((seriesId: string) => {
     setExpanded(current => ({ ...current, [seriesId]: !current[seriesId] }));
@@ -168,6 +265,15 @@ export default function PlayoffsScreen() {
           </View>
         </View>
 
+        {bracket.rounds.length > 0 && (
+          <FilterControls
+            conferenceScope={conferenceScope}
+            roundScope={roundScope}
+            onConferenceChange={setConferenceScope}
+            onRoundChange={setRoundScope}
+          />
+        )}
+
         {query.isLoading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -190,7 +296,15 @@ export default function PlayoffsScreen() {
           </View>
         )}
 
-        {bracket.rounds.map(round => (
+        {!query.isLoading && !query.isError && bracket.rounds.length > 0 && displayRounds.length === 0 && hasActiveFilters && (
+          <View style={styles.emptyState}>
+            <GitFork size={32} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>No series match these filters</Text>
+            <Text style={styles.emptyText}>Try switching back to All conferences or All Rounds.</Text>
+          </View>
+        )}
+
+        {displayRounds.map(round => (
           <RoundSection
             key={round.id}
             round={round}
@@ -200,6 +314,61 @@ export default function PlayoffsScreen() {
           />
         ))}
       </ScrollView>
+    </View>
+  );
+}
+
+interface FilterControlsProps {
+  conferenceScope: ConferenceScope;
+  roundScope: RoundScope;
+  onConferenceChange: (scope: ConferenceScope) => void;
+  onRoundChange: (scope: RoundScope) => void;
+}
+
+function FilterControls({ conferenceScope, roundScope, onConferenceChange, onRoundChange }: FilterControlsProps) {
+  return (
+    <View style={styles.filtersCard}>
+      <View style={styles.filterBlock}>
+        <Text style={styles.filterLabel}>Conference</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillRow}>
+          {CONFERENCE_FILTERS.map(option => {
+            const selected = conferenceScope === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.filterPill, selected && styles.filterPillSelected]}
+                onPress={() => onConferenceChange(option.value)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterPillText, selected && styles.filterPillTextSelected]}>{option.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <View style={styles.filterBlock}>
+        <Text style={styles.filterLabel}>Round</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillRow}>
+          {ROUND_FILTERS.map(option => {
+            const selected = roundScope === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.filterPill, selected && styles.filterPillSelected]}
+                onPress={() => onRoundChange(option.value)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterPillText, selected && styles.filterPillTextSelected]}>{option.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -436,6 +605,48 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
     marginTop: 3,
+  },
+  filtersCard: {
+    backgroundColor: Colors.cardBg,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.xl,
+    gap: Spacing.md,
+  },
+  filterBlock: {
+    gap: Spacing.sm,
+  },
+  filterLabel: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  filterPillRow: {
+    gap: Spacing.sm,
+  },
+  filterPill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  filterPillSelected: {
+    backgroundColor: 'rgba(241,245,249,0.12)',
+    borderColor: 'rgba(241,245,249,0.28)',
+  },
+  filterPillText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
+  filterPillTextSelected: {
+    color: Colors.textPrimary,
   },
   loadingContainer: {
     alignItems: 'center',
