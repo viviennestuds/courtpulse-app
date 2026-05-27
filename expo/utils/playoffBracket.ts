@@ -114,9 +114,9 @@ export interface PlayoffBracket {
   subtitle: string;
   rounds: PlayoffBracketRound[];
   hasConferenceData: boolean;
-  sourceLabel: string;
   seriesCount: number;
-  gameCount: number;
+  completedGameCount: number;
+  liveGameCount: number;
 }
 
 interface ParsedSeriesText {
@@ -451,13 +451,21 @@ export function buildPlayoffBracket(catalog: PlayoffCatalogLike | null | undefin
 
   const rounds = Array.from(roundsByKey.values()).sort((a, b) => roundSortKey(a).localeCompare(roundSortKey(b)));
   const hasConferenceData = series.some(item => item.conference === 'East' || item.conference === 'West');
+  const allSeriesGames = series.flatMap(item => item.games);
+  const completedGameCount = allSeriesGames.filter(game => (
+    game.status === 'final' &&
+    game.homeScore !== undefined &&
+    game.awayScore !== undefined
+  )).length;
+  const liveGameCount = allSeriesGames.filter(game => game.status === 'live').length;
+
   return {
     title: getSeasonTitle(catalogGames),
     subtitle: 'Series results and game outcomes',
     rounds,
     hasConferenceData,
-    sourceLabel: cleanString(catalog?.source) || 'NBA schedule',
     seriesCount: series.length,
-    gameCount: catalogGames.length || series.reduce((sum, item) => sum + item.games.length, 0),
+    completedGameCount,
+    liveGameCount,
   };
 }

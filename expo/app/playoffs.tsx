@@ -94,6 +94,21 @@ function isGameTeamLoser(game: PlayoffSeriesGame, team: PlayoffTeamSlot): boolea
   return game.status === 'final' && !!game.winnerAbbr && !team.isTbd && game.winnerAbbr !== team.abbreviation;
 }
 
+function pluralizeCount(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function playoffSummaryText(seriesCount: number, completedGameCount: number, liveGameCount: number): string {
+  const parts = [
+    pluralizeCount(seriesCount, 'series', 'series'),
+    pluralizeCount(completedGameCount, 'completed game', 'completed games'),
+  ];
+  if (liveGameCount > 0) {
+    parts.push(pluralizeCount(liveGameCount, 'live game', 'live games'));
+  }
+  return parts.join(' · ');
+}
+
 export default function PlayoffsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -143,7 +158,7 @@ export default function PlayoffsScreen() {
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.heroTitle}>Playoff Tree</Text>
-            <Text style={styles.heroSubtitle}>{bracket.seriesCount} series · {bracket.gameCount} games · {bracket.sourceLabel}</Text>
+            <Text style={styles.heroSubtitle}>{playoffSummaryText(bracket.seriesCount, bracket.completedGameCount, bracket.liveGameCount)}</Text>
           </View>
         </View>
 
