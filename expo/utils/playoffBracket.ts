@@ -58,6 +58,13 @@ export interface PlayoffCatalogLike {
   seriesCount?: number;
   games?: PlayoffCatalogGameShape[];
   series?: PlayoffCatalogSeriesShape[];
+  data?: {
+    games?: PlayoffCatalogGameShape[];
+    series?: PlayoffCatalogSeriesShape[];
+    playoffGameCount?: number;
+    seriesCount?: number;
+    source?: string;
+  } | null;
 }
 
 export interface PlayoffTeamSlot {
@@ -342,6 +349,24 @@ function normalizeSeriesGame(game: PlayoffCatalogGameShape): PlayoffSeriesGame {
   };
 }
 
+function catalogGames(catalog: PlayoffCatalogLike | null | undefined): PlayoffCatalogGameShape[] {
+  const topLevelGames = Array.isArray(catalog?.games) ? catalog.games : [];
+  const nestedGames = Array.isArray(catalog?.data?.games) ? catalog.data.games : [];
+  return (topLevelGames.length > 0 ? topLevelGames : nestedGames).filter(playoffLikeGame);
+}
+
+function catalogSeries(catalog: PlayoffCatalogLike | null | undefined): PlayoffCatalogSeriesShape[] {
+  const topLevelSeries = Array.isArray(catalog?.series) ? catalog.series : [];
+  const nestedSeries = Array.isArray(catalog?.data?.series) ? catalog.data.series : [];
+  return topLevelSeries.length > 0 ? topLevelSeries : nestedSeries;
+}
+
+function buildSeriesList(rawSeries: PlayoffCatalogSeriesShape[]): PlayoffSeries[] {
+  return rawSeries
+    .map(buildSeries)
+    .filter((value): value is PlayoffSeries => value !== null);
+}
+
 function groupGamesIntoSeries(games: PlayoffCatalogGameShape[]): PlayoffCatalogSeriesShape[] {
   const grouped = new Map<string, PlayoffCatalogGameShape[]>();
   games.filter(playoffLikeGame).forEach(game => {
@@ -416,13 +441,14 @@ function roundSortKey(round: PlayoffBracketRound): string {
  * status, series labels, and only falls back to completed-game win counts inside each detected series.
  */
 export function buildPlayoffBracket(catalog: PlayoffCatalogLike | null | undefined): PlayoffBracket {
-  const catalogGames = (catalog?.games ?? []).filter(playoffLikeGame);
-  const rawSeries = Array.isArray(catalog?.series) && catalog.series.length > 0
-    ? catalog.series
-    : groupGamesIntoSeries(catalogGames);
-  const series = rawSeries
-    .map(buildSeries)
-    .filter((value): value is PlayoffSeries => value !== null)
+  const games = catalogGames(catalog);
+  const sourceSeries = catalogSeries(catalog);
+  const groupedSeries = groupGamesIntoSeries(games);
+  const sourceBuiltSeries = buildSeriesList(sourceSeries);
+  const fallbackBuiltSeries = sourceBuiltSeries.length === 0 && groupedSeries.length > 0
+    ? buildSeriesList(groupedSeries)
+    : [];
+  const series = (sourceBuiltSeries.length > 0 ? sourceBuiltSeries : fallbackBuiltSeries)
     .sort((a, b) => {
       const roundDiff = a.roundOrder - b.roundOrder;
       if (roundDiff !== 0) return roundDiff;
@@ -460,7 +486,7 @@ export function buildPlayoffBracket(catalog: PlayoffCatalogLike | null | undefin
   const liveGameCount = allSeriesGames.filter(game => game.status === 'live').length;
 
   return {
-    title: getSeasonTitle(catalogGames),
+    title: getSeasonTitle(games),
     subtitle: 'Series results and game outcomes',
     rounds,
     hasConferenceData,
