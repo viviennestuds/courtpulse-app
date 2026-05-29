@@ -2,7 +2,7 @@ import { Game, Team, Player, BoxScorePlayer, PlayByPlayEvent, ShotEvent, Scoring
 import type { ScoreboardParseResult } from './nbaScoreboard';
 import { getTodayDateString, formatGameDate, type FetchDiagnostics } from './nbaApi';
 import { GameDetailData, CdnPbpAction } from './nbaGameData';
-import { fetchTeamStats, fetchPlayerStats, getFallbackTeams } from './nbaStats';
+import { fetchTeamStats, fetchTeamRecordsFromSchedule, fetchPlayerStats, getFallbackTeams } from './nbaStats';
 import { detectScoringRuns, detectDroughts, reconstructLineups, computeCustomMetrics } from './analyticsEngine';
 import {
   getGamesByDate as getProxyGamesByDate,
@@ -219,7 +219,16 @@ export async function getTeams(): Promise<DataResult<Team[]>> {
       return { data: teams, source: 'live', state: 'success' };
     }
   } catch (err) {
-    console.warn('[DataProvider] stats.nba.com teams failed', err);
+    console.warn('[DataProvider] stats.nba.com team ratings failed; trying schedule-backed records', err);
+  }
+
+  try {
+    const teams = await fetchTeamRecordsFromSchedule();
+    if (teams.length > 0) {
+      return { data: teams, source: 'live', state: 'success' };
+    }
+  } catch (err) {
+    console.warn('[DataProvider] NBA schedule-backed team records failed', err);
   }
 
   return { data: getFallbackTeams(), source: 'fallback', state: 'fallback' };

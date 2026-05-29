@@ -345,16 +345,19 @@ export function useTeams() {
   const query = useQuery({
     queryKey: ['teams', 'stats'],
     queryFn: getTeams,
-    staleTime: 60000 * 30,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 6,
     retry: 1,
   });
 
   const teams = query.data?.data ?? getFallbackTeams();
   const dataSource: DataSource = query.data?.source ?? 'fallback';
+  const dataState: DataState = query.data?.state ?? (query.isError ? 'error' : 'fallback');
 
   return {
     teams,
     dataSource,
+    dataState,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

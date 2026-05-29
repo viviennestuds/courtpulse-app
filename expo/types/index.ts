@@ -14,6 +14,8 @@ export interface Team {
   defRating: number;
   netRating: number;
   pace: number;
+  ratingsAvailable?: boolean;
+  recordAvailable?: boolean;
   headToHeadRecord?: string;
   last5Record?: string;
   last10Record?: string;
