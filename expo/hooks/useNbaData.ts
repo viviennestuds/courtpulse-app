@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { getScoreboard, getScoreboardForDate, getRecentGames, getGameDetail, getPlayByPlay, getTeams, getPlayers, DataSource, DataState, ScoreboardDataResult } from '@/services/dataProvider';
+import { getScoreboard, getScoreboardForDate, getRecentGames, getGameDetail, getPlayByPlay, getTeams, getPlayers, DataSource, DataState, ScoreboardDataResult, TeamsDataResult } from '@/services/dataProvider';
 import { getTodayDateString } from '@/services/nbaApi';
 import { GameDetailData, CdnPbpAction, fetchGameHustleStats, HustleStats, fetchGameMatchups, GameMatchupRow } from '@/services/nbaGameData';
 import { getFallbackTeams } from '@/services/nbaStats';
@@ -350,12 +350,14 @@ export function useTeams() {
     retry: 1,
   });
 
-  const teams = query.data?.data ?? getFallbackTeams();
-  const dataSource: DataSource = query.data?.source ?? 'fallback';
-  const dataState: DataState = query.data?.state ?? (query.isError ? 'error' : 'fallback');
+  const teamsResult = query.data as TeamsDataResult | undefined;
+  const teams = teamsResult?.data ?? getFallbackTeams();
+  const dataSource: DataSource = teamsResult?.source ?? 'fallback';
+  const dataState: DataState = teamsResult?.state ?? (query.isError ? 'error' : 'fallback');
 
   return {
     teams,
+    teamsOverview: teamsResult?.overview,
     dataSource,
     dataState,
     isLoading: query.isLoading,

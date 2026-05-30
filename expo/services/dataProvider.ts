@@ -1,8 +1,8 @@
-import { Game, Team, Player, BoxScorePlayer, PlayByPlayEvent, ShotEvent, ScoringRun, ScoringDrought, LineupSegment, CustomMetric } from '@/types';
+import { Game, Team, Player, BoxScorePlayer, PlayByPlayEvent, ShotEvent, ScoringRun, ScoringDrought, LineupSegment, CustomMetric, TeamOverviewResponse } from '@/types';
 import type { ScoreboardParseResult } from './nbaScoreboard';
 import { getTodayDateString, formatGameDate, type FetchDiagnostics } from './nbaApi';
 import { GameDetailData, CdnPbpAction } from './nbaGameData';
-import { fetchTeamStats, fetchTeamRecordsFromSchedule, fetchPlayerStats, getFallbackTeams } from './nbaStats';
+import { fetchTeamsOverview, teamOverviewToTeam, fetchPlayerStats, getFallbackTeams, TEAM_STANDINGS_SEASON } from './nbaStats';
 import { detectScoringRuns, detectDroughts, reconstructLineups, computeCustomMetrics } from './analyticsEngine';
 import {
   getGamesByDate as getProxyGamesByDate,
@@ -41,13 +41,17 @@ async function fetchBackend<T>(path: string, params?: Record<string, string>): P
 }
 
 export type DataSource = 'live' | 'backend' | 'fallback' | 'demo';
-export type DataState = 'success' | 'empty' | 'fallback' | 'error';
+export type DataState = 'success' | 'empty' | 'fallback' | 'error' | 'partial';
 
 export interface DataResult<T> {
   data: T;
   source: DataSource;
   state: DataState;
   errorMessage?: string;
+}
+
+export interface TeamsDataResult extends DataResult<Team[]> {
+  overview?: TeamOverviewResponse;
 }
 
 export interface ScoreboardDataResult extends DataResult<{ games: Game[]; gameDate: string }> {
@@ -203,32 +207,20 @@ export async function getPlayByPlay(gameId: string): Promise<DataResult<{
   return { data, source: 'live', state: data.events.length > 0 || data.rawActions.length > 0 ? 'success' : 'empty' };
 }
 
-export async function getTeams(): Promise<DataResult<Team[]>> {
-  if (hasBackend()) {
-    try {
-      const data = await fetchBackend<Team[]>('/api/teams');
-      return { data, source: 'backend', state: 'success' };
-    } catch (err) {
-      console.warn('[DataProvider] Backend teams failed, falling back to stats.nba.com', err);
-    }
-  }
-
+export async function getTeams(): Promise<TeamsDataResult> {
   try {
-    const teams = await fetchTeamStats();
+    const overview = await fetchTeamsOverview({ season: TEAM_STANDINGS_SEASON, seasonType: 'Regular Season' });
+    const teams = overview.teams.map(teamOverviewToTeam);
     if (teams.length > 0) {
-      return { data: teams, source: 'live', state: 'success' };
+      return {
+        data: teams,
+        source: 'live',
+        state: overview.partial ? 'partial' : 'success',
+        overview,
+      };
     }
   } catch (err) {
-    console.warn('[DataProvider] stats.nba.com team ratings failed; trying schedule-backed records', err);
-  }
-
-  try {
-    const teams = await fetchTeamRecordsFromSchedule();
-    if (teams.length > 0) {
-      return { data: teams, source: 'live', state: 'success' };
-    }
-  } catch (err) {
-    console.warn('[DataProvider] NBA schedule-backed team records failed', err);
+    console.warn('[DataProvider] Supabase teamsOverview.v2 failed; using static team fallback', err);
   }
 
   return { data: getFallbackTeams(), source: 'fallback', state: 'fallback' };

@@ -14,18 +14,28 @@ import { TEAM_STANDINGS_SEASON } from '@/services/nbaStats';
 const CONF_SEGMENTS = ['All', 'East', 'West'];
 type TeamSortKey = 'record' | 'netRtg' | 'offRtg' | 'defRtg';
 
+function safeNumber(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function winPct(team: Team): number | undefined {
+  const overviewPct = safeNumber(team.overview?.standings.winPct);
+  if (overviewPct !== undefined) return overviewPct;
   const games = team.wins + team.losses;
   if (!team.recordAvailable || games <= 0) return undefined;
   return team.wins / games;
 }
 
+function sortMetric(team: Team, key: TeamSortKey): number | undefined {
+  if (key === 'record') return winPct(team);
+  if (!team.ratingsAvailable) return undefined;
+  if (key === 'netRtg') return safeNumber(team.overview?.ratings.netRating) ?? safeNumber(team.netRating);
+  if (key === 'offRtg') return safeNumber(team.overview?.ratings.offRating) ?? safeNumber(team.offRating);
+  return safeNumber(team.overview?.ratings.defRating) ?? safeNumber(team.defRating);
+}
+
 function isRatingAvailable(team: Team, key: TeamSortKey): boolean {
-  if (key === 'record') return winPct(team) !== undefined;
-  if (!team.ratingsAvailable) return false;
-  if (key === 'netRtg') return Number.isFinite(team.netRating);
-  if (key === 'offRtg') return Number.isFinite(team.offRating) && team.offRating > 0;
-  return Number.isFinite(team.defRating) && team.defRating > 0;
+  return sortMetric(team, key) !== undefined;
 }
 
 function compareNullable(aAvailable: boolean, bAvailable: boolean): number {
@@ -43,15 +53,21 @@ function sortTeams(a: Team, b: Team, sortBy: TeamSortKey): number {
     const bPct = winPct(b) ?? -1;
     if (bPct !== aPct) return bPct - aPct;
     if (b.wins !== a.wins) return b.wins - a.wins;
-    return (b.ratingsAvailable ? b.netRating : -999) - (a.ratingsAvailable ? a.netRating : -999);
+    const aConfRank = safeNumber(a.overview?.standings.conferenceRank) ?? 999;
+    const bConfRank = safeNumber(b.overview?.standings.conferenceRank) ?? 999;
+    if (aConfRank !== bConfRank) return aConfRank - bConfRank;
+    return (sortMetric(b, 'netRtg') ?? -999) - (sortMetric(a, 'netRtg') ?? -999);
   }
-  if (sortBy === 'netRtg') return b.netRating - a.netRating;
-  if (sortBy === 'offRtg') return b.offRating - a.offRating;
-  return a.defRating - b.defRating;
+  const aValue = sortMetric(a, sortBy) ?? (sortBy === 'defRtg' ? 999 : -999);
+  const bValue = sortMetric(b, sortBy) ?? (sortBy === 'defRtg' ? 999 : -999);
+  if (sortBy === 'defRtg') return aValue - bValue;
+  return bValue - aValue;
 }
 
 function formatRecord(team: Team): string {
-  return team.recordAvailable ? `${team.wins}-${team.losses}` : 'Record unavailable';
+  const wins = safeNumber(team.overview?.standings.wins) ?? (team.recordAvailable ? team.wins : undefined);
+  const losses = safeNumber(team.overview?.standings.losses) ?? (team.recordAvailable ? team.losses : undefined);
+  return wins !== undefined && losses !== undefined ? `${wins}-${losses}` : 'Record unavailable';
 }
 
 function formatWinPct(team: Team): string {
@@ -59,8 +75,8 @@ function formatWinPct(team: Team): string {
   return pct === undefined ? '—' : pct.toFixed(3).replace(/^0/, '');
 }
 
-function formatRating(value: number, available: boolean, signed: boolean = false): string {
-  if (!available) return '—';
+function formatRatingValue(value: number | undefined, signed: boolean = false): string {
+  if (value === undefined) return '—';
   return `${signed && value > 0 ? '+' : ''}${value.toFixed(1)}`;
 }
 
@@ -73,9 +89,9 @@ function getSortLabel(sortBy: TeamSortKey): string {
 
 function getSortValue(team: Team, sortBy: TeamSortKey): string {
   if (sortBy === 'record') return formatWinPct(team);
-  if (sortBy === 'netRtg') return formatRating(team.netRating, isRatingAvailable(team, sortBy), true);
-  if (sortBy === 'offRtg') return formatRating(team.offRating, isRatingAvailable(team, sortBy));
-  return formatRating(team.defRating, isRatingAvailable(team, sortBy));
+  if (sortBy === 'netRtg') return formatRatingValue(sortMetric(team, sortBy), true);
+  if (sortBy === 'offRtg') return formatRatingValue(sortMetric(team, sortBy));
+  return formatRatingValue(sortMetric(team, sortBy));
 }
 
 export default function TeamsScreen() {
@@ -84,7 +100,7 @@ export default function TeamsScreen() {
   const [conf, setConf] = useState<number>(0);
   const [sortBy, setSortBy] = useState<TeamSortKey>('record');
 
-  const { teams: rawTeams, dataSource, dataState, isLoading, isRefetching, refetch, error } = useTeams();
+  const { teams: rawTeams, teamsOverview, dataSource, dataState, isLoading, isRefetching, refetch, error } = useTeams();
 
   const teams = useMemo<Team[]>(() => {
     let filtered = rawTeams;
@@ -97,16 +113,17 @@ export default function TeamsScreen() {
   const hasRatings = useMemo<boolean>(() => rawTeams.some(team => team.ratingsAvailable), [rawTeams]);
   const hasRecords = useMemo<boolean>(() => rawTeams.some(team => team.recordAvailable), [rawTeams]);
   const showFallbackBadge = dataSource === 'fallback' || dataState === 'fallback';
-  const showLiveBadge = dataSource !== 'fallback' && dataState === 'success';
+  const showLiveBadge = dataSource !== 'fallback' && (dataState === 'success' || dataState === 'partial');
   const showErrorState = !isLoading && dataState === 'error' && rawTeams.length === 0;
 
   const helperText = useMemo<string>(() => {
     if (showErrorState) return 'Team standings could not be loaded.';
     if (showFallbackBadge) return 'Static team list shown because source data is unavailable.';
-    if (hasRecords && !hasRatings) return 'Records are hydrated from NBA schedule metadata. Ratings are unavailable from the current client source.';
-    if (hasRecords && hasRatings) return 'Standings and ratings are source-backed.';
+    if (dataState === 'partial') return 'Source-backed team data loaded with partial availability.';
+    if (hasRecords && hasRatings) return 'Standings, ratings, scoring, and win conditions are source-backed.';
+    if (hasRecords && !hasRatings) return 'Standings are source-backed. Ratings are unavailable.';
     return 'Team metadata loaded. Standings are unavailable.';
-  }, [showErrorState, showFallbackBadge, hasRecords, hasRatings]);
+  }, [showErrorState, showFallbackBadge, dataState, hasRecords, hasRatings]);
 
   const handleRefresh = useCallback(() => {
     void refetch();
@@ -127,13 +144,13 @@ export default function TeamsScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={styles.title}>Teams</Text>
-            <Text style={styles.subtitle}>{TEAM_STANDINGS_SEASON} Season Standings</Text>
+            <Text style={styles.subtitle}>{teamsOverview?.season ?? TEAM_STANDINGS_SEASON} Regular Season Standings</Text>
           </View>
           {(showFallbackBadge || showLiveBadge) && <DataSourceBadge source={dataSource} />}
         </View>
 
         <View style={styles.statusCard}>
-          <View style={[styles.statusDot, { backgroundColor: showFallbackBadge ? Colors.warning : showErrorState ? Colors.negative : Colors.primary }]} />
+          <View style={[styles.statusDot, { backgroundColor: showFallbackBadge || dataState === 'partial' ? Colors.warning : showErrorState ? Colors.negative : Colors.primary }]} />
           <Text style={styles.statusText}>{helperText}</Text>
         </View>
 
@@ -142,17 +159,21 @@ export default function TeamsScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortRow} contentContainerStyle={styles.sortRowContent}>
-          {(['record', 'netRtg', 'offRtg', 'defRtg'] as const).map(s => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.sortChip, sortBy === s && styles.sortChipActive]}
-              onPress={() => setSortBy(s)}
-            >
-              <Text style={[styles.sortChipText, sortBy === s && styles.sortChipTextActive]}>
-                {s === 'record' ? 'Record' : s === 'netRtg' ? 'Net Rtg' : s === 'offRtg' ? 'Off Rtg' : 'Def Rtg'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {(['record', 'netRtg', 'offRtg', 'defRtg'] as const).map(s => {
+            const disabled = (s === 'record' && !hasRecords) || (s !== 'record' && !hasRatings);
+            return (
+              <TouchableOpacity
+                key={s}
+                style={[styles.sortChip, sortBy === s && styles.sortChipActive, disabled && styles.sortChipDisabled]}
+                onPress={() => !disabled && setSortBy(s)}
+                disabled={disabled}
+              >
+                <Text style={[styles.sortChipText, sortBy === s && styles.sortChipTextActive, disabled && styles.sortChipTextDisabled]}>
+                  {s === 'record' ? 'Record' : s === 'netRtg' ? 'Net Rtg' : s === 'offRtg' ? 'Off Rtg' : 'Def Rtg'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {isLoading && (
@@ -181,7 +202,7 @@ export default function TeamsScreen() {
 const TeamRow = React.memo(function TeamRow({ team, rank, sortBy, onPress }: { team: Team; rank: number; sortBy: TeamSortKey; onPress: () => void }) {
   const sortValue = getSortValue(team, sortBy);
   const sortLabel = getSortLabel(sortBy);
-  const ratingsAvailable = team.ratingsAvailable === true;
+  const netRatingValue = sortMetric(team, 'netRtg');
 
   return (
     <TouchableOpacity style={styles.teamRow} onPress={onPress} activeOpacity={0.7}>
@@ -200,7 +221,7 @@ const TeamRow = React.memo(function TeamRow({ team, rank, sortBy, onPress }: { t
           <Text style={styles.miniStatLabel}>{sortLabel}</Text>
         </View>
         <View style={styles.miniStat}>
-          <Text style={[styles.miniStatValue, !ratingsAvailable && styles.unavailableValue]}>{formatRating(team.netRating, ratingsAvailable, true)}</Text>
+          <Text style={[styles.miniStatValue, netRatingValue === undefined && styles.unavailableValue]}>{formatRatingValue(netRatingValue, true)}</Text>
           <Text style={styles.miniStatLabel}>NET</Text>
         </View>
       </View>
@@ -296,6 +317,12 @@ const styles = StyleSheet.create({
   sortChipTextActive: {
     color: Colors.primary,
     fontWeight: FontWeight.semibold,
+  },
+  sortChipDisabled: {
+    opacity: 0.45,
+  },
+  sortChipTextDisabled: {
+    color: Colors.textMuted,
   },
   loadingContainer: {
     alignItems: 'center',

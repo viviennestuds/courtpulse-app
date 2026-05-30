@@ -16,6 +16,7 @@ export interface Team {
   pace: number;
   ratingsAvailable?: boolean;
   recordAvailable?: boolean;
+  overview?: TeamOverview;
   headToHeadRecord?: string;
   last5Record?: string;
   last10Record?: string;
@@ -23,6 +24,100 @@ export interface Team {
   fastbreakPoints?: number;
   transitionFrequency?: number;
   clutchNetRating?: number;
+}
+
+export interface TeamOverviewResponse {
+  success: boolean;
+  schemaVersion: 'teamsOverview.v2';
+  type: 'teamsOverview';
+  season: string;
+  seasonType: string;
+  partial: boolean;
+  sourceStatus?: TeamOverviewSourceStatus;
+  teamCount: number;
+  teams: TeamOverview[];
+  fetchedAt?: string;
+  warnings?: string[];
+  cache?: unknown;
+  error?: string;
+  message?: string;
+}
+
+export interface TeamOverviewSourceStatus {
+  standings?: string;
+  ratings?: string;
+  traditionalDiagnostic?: string;
+}
+
+export interface TeamOverview {
+  teamId: number | string;
+  abbreviation: string;
+  city: string;
+  name: string;
+  fullName: string;
+  conference: 'East' | 'West' | string | null;
+  division: string | null;
+  standings: TeamStandingsSnapshot;
+  ratings: TeamRatingsSnapshot;
+  scoring: TeamScoringSnapshot;
+  recordSplits: TeamRecordSplits;
+  dataAvailability: TeamDataAvailability;
+}
+
+export interface TeamStandingsSnapshot {
+  wins: number | null;
+  losses: number | null;
+  winPct: number | null;
+  leagueRank: number | null;
+  conferenceRank: number | null;
+  divisionRank: number | null;
+  gamesBackConference: number | null;
+  gamesBackDivision: number | null;
+  clinchIndicator: string | null;
+  streak: string | null;
+  last10: string | null;
+  homeRecord: string | null;
+  roadRecord: string | null;
+}
+
+export interface TeamRatingsSnapshot {
+  offRating: number | null;
+  defRating: number | null;
+  netRating: number | null;
+  pace: number | null;
+}
+
+export interface TeamScoringSnapshot {
+  pointsPerGame: number | null;
+  opponentPointsPerGame: number | null;
+  plusMinusPerGame: number | null;
+  totalPoints: number | null;
+  opponentTotalPoints: number | null;
+  totalPointDifferential: number | null;
+}
+
+export interface TeamRecordSplits {
+  aheadAtHalf: string | null;
+  behindAtHalf: string | null;
+  tiedAtHalf: string | null;
+  aheadAtThird: string | null;
+  behindAtThird: string | null;
+  tiedAtThird: string | null;
+  score100Plus: string | null;
+  opponentScore100Plus: string | null;
+  vsOppOver500: string | null;
+  leadInFgPct: string | null;
+  leadInRebounds: string | null;
+  fewerTurnovers: string | null;
+}
+
+export interface TeamDataAvailability {
+  standings: boolean;
+  ratings: boolean;
+  scoring: boolean;
+  recordSplits: boolean;
+  traditionalSource?: boolean;
+  traditionalCoreStats?: boolean;
 }
 
 export interface Player {
