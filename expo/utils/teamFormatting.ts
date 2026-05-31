@@ -63,3 +63,23 @@ export function formatRecordSplit(record: string | null | undefined): string {
   const parsed = parseRecordSplit(record);
   return parsed ? `${parsed.wins}-${parsed.losses}` : record ?? '—';
 }
+
+export function formatClinchIndicator(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized || normalized === '-') return null;
+
+  const labels: Record<string, string> = {
+    '-w': 'West #1 Seed',
+    '-e': 'East #1 Seed',
+    '-sw': 'Southwest Division Winner',
+    '-nw': 'Northwest Division Winner',
+    '-p': 'Pacific Division Winner',
+    '-a': 'Atlantic Division Winner',
+    '-c': 'Central Division Winner',
+    '-se': 'Southeast Division Winner',
+    '-x': 'Playoff Team',
+    '-pi': 'Play-In',
+  };
+
+  return labels[normalized] ?? null;
+}

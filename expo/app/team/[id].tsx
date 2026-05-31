@@ -11,6 +11,7 @@ import { useTeams } from '@/hooks/useNbaData';
 import { Team, TeamRecordSplits } from '@/types';
 import { safeBack } from '@/utils/navigation';
 import {
+  formatClinchIndicator,
   formatGamesBack,
   formatNumber,
   formatRank,
@@ -137,6 +138,7 @@ export default function TeamDetailScreen() {
   const standings = team.overview?.standings;
   const isSourceBacked = dataState === 'success' || dataState === 'partial';
   const headerRecord = getRecord(team);
+  const clinchLabel = formatClinchIndicator(standings?.clinchIndicator);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}> 
@@ -157,6 +159,11 @@ export default function TeamDetailScreen() {
           <Text style={styles.teamRecord}>
             {headerRecord} · {team.conference} · {team.division || '—'}
           </Text>
+          {clinchLabel && (
+            <View style={styles.clinchChip}>
+              <Text style={styles.clinchChipText}>{clinchLabel}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -197,12 +204,6 @@ export default function TeamDetailScreen() {
               <RatingCard title="Defense" value={formatRating(ratings?.defRating)} accent={Colors.secondary} detail="Lower defensive rating is better" />
             </View>
 
-            {standings?.clinchIndicator && (
-              <View style={styles.clinchCard}>
-                <Text style={styles.clinchLabel}>CLINCH INDICATOR</Text>
-                <Text style={styles.clinchValue}>{standings.clinchIndicator}</Text>
-              </View>
-            )}
           </View>
         )}
 
@@ -228,9 +229,9 @@ export default function TeamDetailScreen() {
 
         {activeTab === 3 && (
           <View>
-            <Text style={styles.sectionLabel}>WIN CONDITIONS</Text>
+            <Text style={styles.sectionLabel}>SITUATIONAL RECORDS</Text>
             <Text style={styles.sectionDescription}>
-              Source-backed team records when common game conditions occur.
+              Team record under common game conditions.
             </Text>
             {winConditions.length > 0 ? (
               winConditions.map(condition => (
@@ -363,6 +364,22 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     marginTop: 2,
   },
+  clinchChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    marginTop: Spacing.sm,
+  },
+  clinchChipText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.2,
+  },
   quickStats: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
@@ -399,7 +416,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
+    paddingBottom: 144,
   },
   sourceCallout: {
     flexDirection: 'row',
@@ -497,26 +514,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.xs,
     lineHeight: 16,
-  },
-  clinchCard: {
-    backgroundColor: Colors.warningMuted,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.warning + '40',
-    padding: Spacing.lg,
-    marginTop: Spacing.md,
-  },
-  clinchLabel: {
-    color: Colors.warning,
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    letterSpacing: 1,
-    marginBottom: Spacing.xs,
-  },
-  clinchValue: {
-    color: Colors.textPrimary,
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
   },
   emptyState: {
     padding: Spacing.xl,
