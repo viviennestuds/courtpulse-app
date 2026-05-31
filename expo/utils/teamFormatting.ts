@@ -65,7 +65,7 @@ export function formatRecordSplit(record: string | null | undefined): string {
 }
 
 export function formatClinchIndicator(value: string | null | undefined): string | null {
-  const normalized = value?.trim().toLowerCase();
+  const normalized = value?.trim().toLowerCase().replace(/\s+/g, '');
   if (!normalized || normalized === '-') return null;
 
   const labels: Record<string, string> = {
