@@ -7,8 +7,9 @@ import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import SegmentControl from '@/components/SegmentControl';
 import DataSourceBadge from '@/components/DataSourceBadge';
-import { useTeams } from '@/hooks/useNbaData';
-import { Team, TeamRecordSplits } from '@/types';
+import { useTeamRoster, useTeams } from '@/hooks/useNbaData';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { PlayerOverview, Team, TeamRecordSplits, TeamRosterPlayer } from '@/types';
 import { safeBack } from '@/utils/navigation';
 import {
   formatClinchIndicator,
@@ -24,6 +25,7 @@ import {
 } from '@/utils/teamFormatting';
 
 const TEAM_TABS = ['Overview', 'Roster', 'Games', 'Conditions'];
+const TEAMS_ROSTER_FLAG = 'teams_roster_hydration_enabled';
 
 type RecordSplitKey = keyof TeamRecordSplits;
 
@@ -36,6 +38,16 @@ interface WinConditionItem {
   key: RecordSplitKey;
   label: string;
   helper: string;
+}
+
+interface HydratedRosterPlayer {
+  roster: TeamRosterPlayer;
+  stats?: PlayerOverview;
+}
+
+interface PlayerRankBadge {
+  label: string;
+  priority: number;
 }
 
 const WIN_CONDITIONS: WinConditionItem[] = [
@@ -89,14 +101,112 @@ function buildScoringRows(team: Team): OverviewRowItem[] {
   ];
 }
 
+function getJerseySortValue(jersey: string | null | undefined): number {
+  const parsed = Number(jersey);
+  return Number.isFinite(parsed) ? parsed : 999;
+}
+
+function getStatSortValue(player: HydratedRosterPlayer): number {
+  const possessions = safeNumber(player.stats?.advanced.possessions);
+  if (possessions !== undefined) return possessions;
+  const minutes = safeNumber(player.stats?.base.minutesPerGame);
+  return minutes ?? -1;
+}
+
+function sortRosterPlayers(players: HydratedRosterPlayer[]): HydratedRosterPlayer[] {
+  return [...players].sort((a, b) => {
+    const aHasStats = a.stats ? 1 : 0;
+    const bHasStats = b.stats ? 1 : 0;
+    if (aHasStats !== bHasStats) return bHasStats - aHasStats;
+
+    const aRole = getStatSortValue(a);
+    const bRole = getStatSortValue(b);
+    if (aRole !== bRole) return bRole - aRole;
+
+    const aJersey = getJerseySortValue(a.roster.jersey);
+    const bJersey = getJerseySortValue(b.roster.jersey);
+    if (aJersey !== bJersey) return aJersey - bJersey;
+
+    return a.roster.fullName.localeCompare(b.roster.fullName);
+  });
+}
+
+function formatOptionalText(value: string | number | null | undefined, suffix: string = ''): string {
+  if (value === null || value === undefined || value === '') return '—';
+  return `${value}${suffix}`;
+}
+
+function formatCompactStat(value: number | null | undefined): string {
+  const safeValue = safeNumber(value);
+  if (safeValue === undefined) return '—';
+  return Number.isInteger(safeValue) ? String(safeValue) : safeValue.toFixed(1);
+}
+
+function formatTrueShooting(value: number | null | undefined): string {
+  const safeValue = safeNumber(value);
+  if (safeValue === undefined) return '—';
+  return `${(safeValue * 100).toFixed(1)} TS%`;
+}
+
+function formatAcquisition(player: TeamRosterPlayer): string | null {
+  const acquisition = player.acquisition;
+  if (!acquisition) return player.howAcquired;
+
+  const type = acquisition.type?.trim();
+  if (type === 'draft') {
+    const pick = safeNumber(acquisition.draftPick);
+    const year = safeNumber(acquisition.draftYear);
+    if (pick !== undefined && year !== undefined) return `Drafted · #${pick} Pick · ${year}`;
+    if (year !== undefined) return `Drafted · ${year}`;
+  }
+  if (type === 'trade') {
+    const from = acquisition.fromTeamAbbreviation ? ` from ${acquisition.fromTeamAbbreviation}` : '';
+    const date = acquisition.date ? ` · ${acquisition.date}` : '';
+    return `Traded${from}${date}`;
+  }
+  if (type === 'signing') {
+    return `Signed${acquisition.date ? ` · ${acquisition.date}` : ''}`;
+  }
+  if (type === 'draftRightsTrade') {
+    const from = acquisition.fromTeamAbbreviation ? ` from ${acquisition.fromTeamAbbreviation}` : '';
+    const date = acquisition.date ? ` · ${acquisition.date}` : '';
+    return `Draft rights${from}${date}`;
+  }
+
+  return acquisition.raw ?? player.howAcquired;
+}
+
+function rankBadge(rank: number | null | undefined, teamAbbreviation: string, label: string, priority: number): PlayerRankBadge | null {
+  const safeRank = safeNumber(rank);
+  if (safeRank === undefined || safeRank < 1 || safeRank > 3) return null;
+  return { label: `#${safeRank} ${teamAbbreviation} ${label}`, priority };
+}
+
+function getPlayerRankBadges(player: PlayerOverview | undefined, teamAbbreviation: string, rankScope: string | null | undefined): PlayerRankBadge[] {
+  if (!player || rankScope !== 'team') return [];
+  const badges = [
+    rankBadge(player.ranks.base?.points, teamAbbreviation, 'PPG', 1),
+    rankBadge(player.ranks.base?.minutes, teamAbbreviation, 'MIN', 2),
+    rankBadge(player.ranks.base?.assists, teamAbbreviation, 'AST', 3),
+    rankBadge(player.ranks.base?.rebounds, teamAbbreviation, 'REB', 4),
+    rankBadge(player.ranks.advanced?.trueShootingPct, teamAbbreviation, 'TS%', 5),
+    rankBadge(player.ranks.advanced?.usagePct, teamAbbreviation, 'USG', 6),
+    rankBadge(player.ranks.advanced?.netRating, teamAbbreviation, 'NET', 7),
+  ].filter((badge): badge is PlayerRankBadge => badge !== null);
+
+  return badges.sort((a, b) => a.priority - b.priority).slice(0, 2);
+}
+
 export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<number>(0);
+  const isRosterHydrationEnabled = useFeatureFlag(TEAMS_ROSTER_FLAG);
 
   const { teams, dataSource: teamSource, dataState, isLoading } = useTeams();
   const team = useMemo<Team | undefined>(() => teams.find(t => t.id === id), [teams, id]);
+  const rosterQuery = useTeamRoster(id, isRosterHydrationEnabled && activeTab === 1 && !!team);
 
   const handleBack = useCallback(() => {
     safeBack(router, '/(tabs)/teams');
@@ -111,6 +221,18 @@ export default function TeamDetailScreen() {
       .map(condition => ({ ...condition, record: splits[condition.key] }))
       .filter(condition => condition.record && formatRecordSplit(condition.record) !== '—');
   }, [team]);
+  const hydratedRoster = useMemo<HydratedRosterPlayer[]>(() => {
+    const rosterPlayers = rosterQuery.roster?.players ?? [];
+    const statsByPlayerId = new Map<string, PlayerOverview>();
+    rosterQuery.playersOverview?.players.forEach(player => {
+      statsByPlayerId.set(String(player.playerId), player);
+    });
+
+    return sortRosterPlayers(rosterPlayers.map(player => ({
+      roster: player,
+      stats: statsByPlayerId.get(String(player.playerId)),
+    })));
+  }, [rosterQuery.roster, rosterQuery.playersOverview]);
 
   if (isLoading && !team) {
     return (
@@ -210,10 +332,22 @@ export default function TeamDetailScreen() {
         {activeTab === 1 && (
           <View>
             <Text style={styles.sectionLabel}>ROSTER</Text>
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Roster data is coming soon.</Text>
-              <Text style={styles.emptyText}>This pass focuses on source-backed team season data.</Text>
-            </View>
+            {isRosterHydrationEnabled ? (
+              <RosterTabContent
+                players={hydratedRoster}
+                isLoading={rosterQuery.isLoading}
+                isError={rosterQuery.isError}
+                errorMessage={rosterQuery.error instanceof Error ? rosterQuery.error.message : undefined}
+                statsUnavailable={!!rosterQuery.statsErrorMessage && !rosterQuery.playersOverview}
+                rankScope={rosterQuery.playersOverview?.rankScope}
+                teamAbbreviation={team.abbreviation}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>Roster data is coming soon.</Text>
+                <Text style={styles.emptyText}>Roster hydration is disabled in feature flags.</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -278,6 +412,143 @@ const RatingCard = React.memo(function RatingCard({ title, value, accent, detail
       <Text style={styles.ratingTitle}>{title}</Text>
       <Text style={[styles.ratingValue, value === '—' && styles.unavailableValue]}>{value}</Text>
       <Text style={styles.ratingDetail}>{detail}</Text>
+    </View>
+  );
+});
+
+const RosterTabContent = React.memo(function RosterTabContent({
+  players,
+  isLoading,
+  isError,
+  errorMessage,
+  statsUnavailable,
+  rankScope,
+  teamAbbreviation,
+}: {
+  players: HydratedRosterPlayer[];
+  isLoading: boolean;
+  isError: boolean;
+  errorMessage?: string;
+  statsUnavailable: boolean;
+  rankScope: string | null | undefined;
+  teamAbbreviation: string;
+}) {
+  if (isLoading && players.length === 0) {
+    return (
+      <View style={styles.emptyState}>
+        <ActivityIndicator size="small" color={Colors.primary} />
+        <Text style={styles.emptyTitle}>Loading roster...</Text>
+        <Text style={styles.emptyText}>Fetching source-backed player identity and season stats.</Text>
+      </View>
+    );
+  }
+
+  if (isError && players.length === 0) {
+    return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyTitle}>Roster is unavailable right now.</Text>
+        <Text style={styles.emptyText}>{errorMessage ?? 'Try again shortly.'}</Text>
+      </View>
+    );
+  }
+
+  if (players.length === 0) {
+    return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyTitle}>No roster players found.</Text>
+        <Text style={styles.emptyText}>This team roster has no players in the current source payload.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {statsUnavailable && (
+        <View style={styles.sourceCallout}>
+          <View style={[styles.sourceDot, { backgroundColor: Colors.warning }]} />
+          <Text style={styles.sourceCalloutText}>Roster identity loaded. Player season stats are unavailable right now.</Text>
+        </View>
+      )}
+      {players.map(player => (
+        <RosterPlayerCard
+          key={String(player.roster.playerId)}
+          player={player}
+          statsUnavailable={statsUnavailable}
+          rankScope={rankScope}
+          teamAbbreviation={teamAbbreviation}
+        />
+      ))}
+    </View>
+  );
+});
+
+const RosterPlayerCard = React.memo(function RosterPlayerCard({
+  player,
+  statsUnavailable,
+  rankScope,
+  teamAbbreviation,
+}: {
+  player: HydratedRosterPlayer;
+  statsUnavailable: boolean;
+  rankScope: string | null | undefined;
+  teamAbbreviation: string;
+}) {
+  const { roster, stats } = player;
+  const acquisitionText = formatAcquisition(roster);
+  const badges = getPlayerRankBadges(stats, teamAbbreviation, rankScope);
+  const metadata = [
+    formatOptionalText(roster.height),
+    formatOptionalText(roster.weight, roster.weight ? ' lbs' : ''),
+    roster.age !== null ? `${roster.age} yrs` : '—',
+    roster.experience ? `${roster.experience} exp` : '—',
+  ].filter(value => value !== '—');
+
+  return (
+    <View style={styles.rosterCard}>
+      <View style={styles.rosterTopRow}>
+        <View style={styles.jerseyBadge}>
+          <Text style={styles.jerseyText}>{formatOptionalText(roster.jersey)}</Text>
+        </View>
+        <View style={styles.rosterIdentity}>
+          <View style={styles.rosterNameRow}>
+            <Text style={styles.rosterName}>{roster.fullName}</Text>
+            {roster.position && <Text style={styles.positionPill}>{roster.position}</Text>}
+          </View>
+          {metadata.length > 0 && <Text style={styles.rosterMeta}>{metadata.join(' · ')}</Text>}
+          {acquisitionText && <Text style={styles.acquisitionText}>{acquisitionText}</Text>}
+        </View>
+      </View>
+
+      {badges.length > 0 && (
+        <View style={styles.rankBadgeRow}>
+          {badges.map(badge => (
+            <View key={badge.label} style={styles.rankBadge}>
+              <Text style={styles.rankBadgeText}>{badge.label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {stats ? (
+        <View style={styles.statStrip}>
+          <RosterStatCell label="MIN" value={formatCompactStat(stats.base.minutesPerGame)} />
+          <RosterStatCell label="PTS" value={formatCompactStat(stats.base.pointsPerGame)} />
+          <RosterStatCell label="REB" value={formatCompactStat(stats.base.reboundsPerGame)} />
+          <RosterStatCell label="AST" value={formatCompactStat(stats.base.assistsPerGame)} />
+          <RosterStatCell label="TS%" value={formatTrueShooting(stats.advanced.trueShootingPct)} />
+        </View>
+      ) : (
+        <Text style={styles.rosterUnavailableText}>{statsUnavailable ? 'Stats unavailable' : 'No 2025-26 team stats available.'}</Text>
+      )}
+    </View>
+  );
+});
+
+const RosterStatCell = React.memo(function RosterStatCell({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.rosterStatCell}>
+      <Text style={[styles.rosterStatValue, value === '—' && styles.unavailableValue]}>{value}</Text>
+      <Text style={styles.rosterStatLabel}>{label}</Text>
     </View>
   );
 });
@@ -523,6 +794,120 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     gap: Spacing.xs,
+  },
+  rosterCard: {
+    backgroundColor: Colors.cardBg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    padding: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  rosterTopRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    alignItems: 'flex-start',
+  },
+  jerseyBadge: {
+    minWidth: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  jerseyText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.heavy,
+    fontVariant: ['tabular-nums'],
+  },
+  rosterIdentity: {
+    flex: 1,
+  },
+  rosterNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flexWrap: 'wrap',
+  },
+  rosterName: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    flexShrink: 1,
+  },
+  positionPill: {
+    color: Colors.primary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    backgroundColor: Colors.primaryMuted,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
+  rosterMeta: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.sm,
+    marginTop: 3,
+  },
+  acquisitionText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.xs,
+    lineHeight: 16,
+  },
+  rankBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  rankBadge: {
+    backgroundColor: Colors.secondaryMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(6,182,212,0.35)',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  rankBadgeText: {
+    color: Colors.secondary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
+  statStrip: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  rosterStatCell: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+  },
+  rosterStatValue: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  rosterStatLabel: {
+    color: Colors.textMuted,
+    fontSize: 9,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.4,
+    marginTop: 2,
+  },
+  rosterUnavailableText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.sm,
+    marginTop: Spacing.md,
   },
   emptyTitle: {
     color: Colors.textPrimary,

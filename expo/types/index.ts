@@ -120,6 +120,113 @@ export interface TeamDataAvailability {
   traditionalCoreStats?: boolean;
 }
 
+export interface TeamRosterResponse {
+  success: boolean;
+  schemaVersion: 'teamRoster.v2';
+  type: 'teamRoster';
+  season: string;
+  teamId: number | string | null;
+  partial?: boolean;
+  players: TeamRosterPlayer[];
+  fetchedAt?: string;
+  warnings?: string[];
+  cache?: unknown;
+  error?: string;
+  message?: string;
+}
+
+export interface TeamRosterPlayer {
+  playerId: number | string;
+  fullName: string;
+  nickname: string | null;
+  playerSlug: string | null;
+  jersey: string | null;
+  position: string | null;
+  height: string | null;
+  weight: string | null;
+  birthDate: string | null;
+  age: number | null;
+  experience: string | null;
+  school: string | null;
+  country: string | null;
+  howAcquired: string | null;
+  acquisition: TeamRosterAcquisition | null;
+  teamId: number | string | null;
+  teamAbbreviation: string | null;
+  season: string | null;
+}
+
+export interface TeamRosterAcquisition {
+  raw: string | null;
+  type: string | null;
+  fromTeamAbbreviation: string | null;
+  date: string | null;
+  draftPick: number | null;
+  draftYear: number | null;
+}
+
+export interface PlayersOverviewResponse {
+  success: boolean;
+  schemaVersion: 'playersOverview.v2';
+  type: 'playersOverview';
+  season: string;
+  teamId: number | string | null;
+  teamAbbreviation: string | null;
+  rankScope: string | null;
+  partial?: boolean;
+  playerCount?: number;
+  sourceStatus?: Record<string, string>;
+  players: PlayerOverview[];
+  fetchedAt?: string;
+  warnings?: string[];
+  cache?: unknown;
+  error?: string;
+  message?: string;
+}
+
+export interface PlayerOverview {
+  playerId: number | string;
+  fullName: string;
+  nickname: string | null;
+  teamId: number | string | null;
+  teamAbbreviation: string | null;
+  teamName: string | null;
+  age: number | null;
+  base: PlayerOverviewBaseStats;
+  advanced: PlayerOverviewAdvancedStats;
+  ranks: PlayerOverviewRanks;
+  dataAvailability?: Record<string, boolean>;
+}
+
+export interface PlayerOverviewBaseStats {
+  gamesPlayed: number | null;
+  minutesPerGame: number | null;
+  pointsPerGame: number | null;
+  reboundsPerGame: number | null;
+  assistsPerGame: number | null;
+}
+
+export interface PlayerOverviewAdvancedStats {
+  possessions: number | null;
+  trueShootingPct: number | null;
+  usagePct: number | null;
+  netRating: number | null;
+}
+
+export interface PlayerOverviewRanks {
+  base?: {
+    points?: number | null;
+    rebounds?: number | null;
+    assists?: number | null;
+    minutes?: number | null;
+  };
+  advanced?: {
+    trueShootingPct?: number | null;
+    usagePct?: number | null;
+    netRating?: number | null;
+  };
+}
+
 export interface Player {
   id: string;
   name: string;

@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { getScoreboard, getScoreboardForDate, getRecentGames, getGameDetail, getPlayByPlay, getTeams, getPlayers, DataSource, DataState, ScoreboardDataResult, TeamsDataResult } from '@/services/dataProvider';
+import { getScoreboard, getScoreboardForDate, getRecentGames, getGameDetail, getPlayByPlay, getTeams, getTeamRoster, getPlayers, DataSource, DataState, ScoreboardDataResult, TeamsDataResult, TeamRosterDataResult } from '@/services/dataProvider';
 import { getTodayDateString } from '@/services/nbaApi';
 import { GameDetailData, CdnPbpAction, fetchGameHustleStats, HustleStats, fetchGameMatchups, GameMatchupRow } from '@/services/nbaGameData';
 import { getFallbackTeams } from '@/services/nbaStats';
@@ -360,6 +360,32 @@ export function useTeams() {
     teamsOverview: teamsResult?.overview,
     dataSource,
     dataState,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+    isRefetching: query.isRefetching,
+  };
+}
+
+export function useTeamRoster(teamId: string | undefined, enabled: boolean = true) {
+  const query = useQuery({
+    queryKey: ['teamRoster', teamId],
+    queryFn: () => getTeamRoster(teamId ?? ''),
+    enabled: enabled && !!teamId,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 6,
+    retry: 1,
+  });
+
+  const rosterResult = query.data as TeamRosterDataResult | undefined;
+
+  return {
+    roster: rosterResult?.data.roster,
+    playersOverview: rosterResult?.data.playersOverview,
+    dataSource: rosterResult?.source ?? ('live' as DataSource),
+    dataState: rosterResult?.state ?? (query.isError ? 'error' : 'empty'),
+    statsErrorMessage: rosterResult?.errorMessage,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

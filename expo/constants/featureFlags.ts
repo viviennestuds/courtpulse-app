@@ -335,6 +335,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     channel: 'experimental',
     defaultEnabled: true,
   },
+  {
+    key: 'teams_roster_hydration_enabled',
+    label: 'Teams Roster Hydration',
+    description: 'Hydrate Team Detail roster cards from the source-backed teamRoster and playersOverview stats proxy payloads.',
+    channel: 'stable',
+    defaultEnabled: true,
+  },
 ] as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[number]['key'];

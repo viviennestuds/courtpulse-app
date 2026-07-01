@@ -1,4 +1,4 @@
-import { Team, Player, TeamOverview, TeamOverviewResponse } from '@/types';
+import { Team, Player, PlayerOverview, PlayersOverviewResponse, TeamOverview, TeamOverviewResponse, TeamRosterPlayer, TeamRosterResponse } from '@/types';
 import { fetchNbaCdnStatic, fetchNbaStats, NBA_SEASON_TYPE } from './nbaApi';
 import { getPlayerHeadshotUrl, getTeamInfoById, NBA_TEAMS } from '@/constants/nbaTeams';
 
@@ -96,6 +96,10 @@ function toNullableString(value: unknown): string | null {
 function normalizeConference(value: unknown, fallback?: 'East' | 'West'): 'East' | 'West' {
   if (value === 'East' || value === 'West') return value;
   return fallback ?? 'East';
+}
+
+function toNullableBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function normalizeTeamOverview(raw: unknown): TeamOverview | null {
@@ -274,6 +278,201 @@ export async function fetchTeamsOverview({
 export async function fetchTeamsOverviewTeams(): Promise<Team[]> {
   const overview = await fetchTeamsOverview({ season: TEAM_STANDINGS_SEASON, seasonType: 'Regular Season' });
   return overview.teams.map(teamOverviewToTeam);
+}
+
+function validateStatsProxyPayload(parsed: unknown, expectedType: string, expectedSchema: string): Record<string, unknown> {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(`${expectedType} proxy returned a non-object payload`);
+  }
+
+  const payload = parsed as Record<string, unknown>;
+  if (payload.success !== true) {
+    const reason = typeof payload.error === 'string' ? payload.error : typeof payload.message === 'string' ? payload.message : 'success=false';
+    throw new Error(`${expectedType} proxy failed: ${reason}`);
+  }
+  if (payload.schemaVersion !== expectedSchema || payload.type !== expectedType) {
+    throw new Error(`Unexpected ${expectedType} schema: ${String(payload.schemaVersion ?? 'unknown')}`);
+  }
+
+  return payload;
+}
+
+async function fetchNbaStatsProxyPayload(params: Record<string, string>): Promise<Record<string, unknown>> {
+  const url = new URL(NBA_STATS_PROXY_BASE_URL);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  const response = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`NBA stats proxy returned ${response.status}: ${text.substring(0, 160)}`);
+  }
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(`NBA stats proxy returned invalid JSON: ${text.substring(0, 160)}`);
+  }
+}
+
+function normalizeTeamRosterAcquisition(raw: unknown): TeamRosterPlayer['acquisition'] {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  return {
+    raw: toNullableString(obj.raw),
+    type: toNullableString(obj.type),
+    fromTeamAbbreviation: toNullableString(obj.fromTeamAbbreviation),
+    date: toNullableString(obj.date),
+    draftPick: toNullableNumber(obj.draftPick),
+    draftYear: toNullableNumber(obj.draftYear),
+  };
+}
+
+function normalizeTeamRosterPlayer(raw: unknown): TeamRosterPlayer | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const playerId = toNumber(obj.playerId);
+  if (playerId === undefined) return null;
+
+  return {
+    playerId,
+    fullName: toNullableString(obj.fullName) ?? 'Unknown Player',
+    nickname: toNullableString(obj.nickname),
+    playerSlug: toNullableString(obj.playerSlug),
+    jersey: toNullableString(obj.jersey),
+    position: toNullableString(obj.position),
+    height: toNullableString(obj.height),
+    weight: toNullableString(obj.weight),
+    birthDate: toNullableString(obj.birthDate),
+    age: toNullableNumber(obj.age),
+    experience: toNullableString(obj.experience),
+    school: toNullableString(obj.school),
+    country: toNullableString(obj.country),
+    howAcquired: toNullableString(obj.howAcquired),
+    acquisition: normalizeTeamRosterAcquisition(obj.acquisition),
+    teamId: toNumber(obj.teamId) ?? toNullableString(obj.teamId),
+    teamAbbreviation: toNullableString(obj.teamAbbreviation),
+    season: toNullableString(obj.season),
+  };
+}
+
+function normalizePlayerOverviewRanks(raw: unknown): PlayerOverview['ranks'] {
+  const obj = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const base = obj.base && typeof obj.base === 'object' ? obj.base as Record<string, unknown> : {};
+  const advanced = obj.advanced && typeof obj.advanced === 'object' ? obj.advanced as Record<string, unknown> : {};
+
+  return {
+    base: {
+      points: toNullableNumber(base.points),
+      rebounds: toNullableNumber(base.rebounds),
+      assists: toNullableNumber(base.assists),
+      minutes: toNullableNumber(base.minutes),
+    },
+    advanced: {
+      trueShootingPct: toNullableNumber(advanced.trueShootingPct),
+      usagePct: toNullableNumber(advanced.usagePct),
+      netRating: toNullableNumber(advanced.netRating),
+    },
+  };
+}
+
+function normalizePlayerOverview(raw: unknown): PlayerOverview | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const playerId = toNumber(obj.playerId);
+  if (playerId === undefined) return null;
+
+  const base = obj.base && typeof obj.base === 'object' ? obj.base as Record<string, unknown> : {};
+  const advanced = obj.advanced && typeof obj.advanced === 'object' ? obj.advanced as Record<string, unknown> : {};
+  const dataAvailability = obj.dataAvailability && typeof obj.dataAvailability === 'object' ? obj.dataAvailability as Record<string, unknown> : {};
+
+  return {
+    playerId,
+    fullName: toNullableString(obj.fullName) ?? 'Unknown Player',
+    nickname: toNullableString(obj.nickname),
+    teamId: toNumber(obj.teamId) ?? toNullableString(obj.teamId),
+    teamAbbreviation: toNullableString(obj.teamAbbreviation),
+    teamName: toNullableString(obj.teamName),
+    age: toNullableNumber(obj.age),
+    base: {
+      gamesPlayed: toNullableNumber(base.gamesPlayed),
+      minutesPerGame: toNullableNumber(base.minutesPerGame),
+      pointsPerGame: toNullableNumber(base.pointsPerGame),
+      reboundsPerGame: toNullableNumber(base.reboundsPerGame),
+      assistsPerGame: toNullableNumber(base.assistsPerGame),
+    },
+    advanced: {
+      possessions: toNullableNumber(advanced.possessions),
+      trueShootingPct: toNullableNumber(advanced.trueShootingPct),
+      usagePct: toNullableNumber(advanced.usagePct),
+      netRating: toNullableNumber(advanced.netRating),
+    },
+    ranks: normalizePlayerOverviewRanks(obj.ranks),
+    dataAvailability: Object.fromEntries(
+      Object.entries(dataAvailability)
+        .map(([key, value]) => [key, toNullableBoolean(value)])
+        .filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')
+    ),
+  };
+}
+
+export async function fetchTeamRoster({
+  teamId,
+  season = TEAM_STANDINGS_SEASON,
+}: {
+  teamId: string | number;
+  season?: string;
+}): Promise<TeamRosterResponse> {
+  const parsed = await fetchNbaStatsProxyPayload({ type: 'teamRoster', teamId: String(teamId), season });
+  const payload = validateStatsProxyPayload(parsed, 'teamRoster', 'teamRoster.v2');
+  if (!Array.isArray(payload.players)) {
+    throw new Error('teamRoster payload is missing players array');
+  }
+
+  const players = payload.players.map(normalizeTeamRosterPlayer).filter((player): player is TeamRosterPlayer => player !== null);
+  return {
+    success: true,
+    schemaVersion: 'teamRoster.v2',
+    type: 'teamRoster',
+    season: typeof payload.season === 'string' ? payload.season : season,
+    teamId: toNumber(payload.teamId) ?? toNullableString(payload.teamId),
+    partial: payload.partial === true,
+    players,
+    fetchedAt: typeof payload.fetchedAt === 'string' ? payload.fetchedAt : undefined,
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === 'string') : undefined,
+    cache: payload.cache,
+  };
+}
+
+export async function fetchPlayersOverview({
+  teamId,
+  season = TEAM_STANDINGS_SEASON,
+}: {
+  teamId: string | number;
+  season?: string;
+}): Promise<PlayersOverviewResponse> {
+  const parsed = await fetchNbaStatsProxyPayload({ type: 'playersOverview', teamId: String(teamId), season });
+  const payload = validateStatsProxyPayload(parsed, 'playersOverview', 'playersOverview.v2');
+  if (!Array.isArray(payload.players)) {
+    throw new Error('playersOverview payload is missing players array');
+  }
+
+  const players = payload.players.map(normalizePlayerOverview).filter((player): player is PlayerOverview => player !== null);
+  return {
+    success: true,
+    schemaVersion: 'playersOverview.v2',
+    type: 'playersOverview',
+    season: typeof payload.season === 'string' ? payload.season : season,
+    teamId: toNumber(payload.teamId) ?? toNullableString(payload.teamId),
+    teamAbbreviation: toNullableString(payload.teamAbbreviation),
+    rankScope: toNullableString(payload.rankScope),
+    partial: payload.partial === true,
+    playerCount: toNullableNumber(payload.playerCount) ?? undefined,
+    sourceStatus: payload.sourceStatus && typeof payload.sourceStatus === 'object' ? payload.sourceStatus as Record<string, string> : undefined,
+    players,
+    fetchedAt: typeof payload.fetchedAt === 'string' ? payload.fetchedAt : undefined,
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === 'string') : undefined,
+    cache: payload.cache,
+  };
 }
 
 export async function fetchTeamStats(): Promise<Team[]> {

@@ -1,8 +1,8 @@
-import { Game, Team, Player, BoxScorePlayer, PlayByPlayEvent, ShotEvent, ScoringRun, ScoringDrought, LineupSegment, CustomMetric, TeamOverviewResponse } from '@/types';
+import { Game, Team, Player, BoxScorePlayer, PlayByPlayEvent, ShotEvent, ScoringRun, ScoringDrought, LineupSegment, CustomMetric, TeamOverviewResponse, TeamRosterResponse, PlayersOverviewResponse } from '@/types';
 import type { ScoreboardParseResult } from './nbaScoreboard';
 import { getTodayDateString, formatGameDate, type FetchDiagnostics } from './nbaApi';
 import { GameDetailData, CdnPbpAction } from './nbaGameData';
-import { fetchTeamsOverview, teamOverviewToTeam, fetchPlayerStats, getFallbackTeams, TEAM_STANDINGS_SEASON } from './nbaStats';
+import { fetchPlayersOverview, fetchTeamRoster, fetchTeamsOverview, teamOverviewToTeam, fetchPlayerStats, getFallbackTeams, TEAM_STANDINGS_SEASON } from './nbaStats';
 import { detectScoringRuns, detectDroughts, reconstructLineups, computeCustomMetrics } from './analyticsEngine';
 import {
   getGamesByDate as getProxyGamesByDate,
@@ -53,6 +53,11 @@ export interface DataResult<T> {
 export interface TeamsDataResult extends DataResult<Team[]> {
   overview?: TeamOverviewResponse;
 }
+
+export interface TeamRosterDataResult extends DataResult<{
+  roster: TeamRosterResponse;
+  playersOverview?: PlayersOverviewResponse;
+}> {}
 
 export interface ScoreboardDataResult extends DataResult<{ games: Game[]; gameDate: string }> {
   parseResult: ScoreboardParseResult | null;
@@ -224,6 +229,28 @@ export async function getTeams(): Promise<TeamsDataResult> {
   }
 
   return { data: getFallbackTeams(), source: 'fallback', state: 'fallback' };
+}
+
+export async function getTeamRoster(teamId: string): Promise<TeamRosterDataResult> {
+  const roster = await fetchTeamRoster({ teamId, season: TEAM_STANDINGS_SEASON });
+
+  try {
+    const playersOverview = await fetchPlayersOverview({ teamId, season: TEAM_STANDINGS_SEASON });
+    return {
+      data: { roster, playersOverview },
+      source: 'live',
+      state: roster.partial || playersOverview.partial ? 'partial' : 'success',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[DataProvider] playersOverview.v2 failed for team ${teamId}; showing roster identity only`, err);
+    return {
+      data: { roster },
+      source: 'live',
+      state: 'partial',
+      errorMessage: message,
+    };
+  }
 }
 
 export async function getPlayers(): Promise<DataResult<Player[]>> {
