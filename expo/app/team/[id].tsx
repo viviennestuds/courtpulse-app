@@ -145,7 +145,33 @@ function formatCompactStat(value: number | null | undefined): string {
 function formatTrueShooting(value: number | null | undefined): string {
   const safeValue = safeNumber(value);
   if (safeValue === undefined) return '—';
-  return `${(safeValue * 100).toFixed(1)} TS%`;
+  return `${(safeValue * 100).toFixed(1)}%`;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatAcquisitionDate(date: string | null | undefined): string | null {
+  if (!date) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date.trim());
+  if (!match) return date;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) return date;
+  return `${MONTH_NAMES[month - 1]} ${day}, ${year}`;
+}
+
+/** Returns contrast-safe text color (near-black on light team colors, white on dark). */
+function jerseyTextColor(hex: string | null | undefined): string {
+  if (!hex) return Colors.textPrimary;
+  const normalized = hex.replace('#', '').trim();
+  if (normalized.length !== 6) return Colors.textPrimary;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  if ([r, g, b].some(v => Number.isNaN(v))) return Colors.textPrimary;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? '#0B0F17' : '#FFFFFF';
 }
 
 function formatAcquisition(player: TeamRosterPlayer): string | null {
@@ -153,6 +179,7 @@ function formatAcquisition(player: TeamRosterPlayer): string | null {
   if (!acquisition) return player.howAcquired;
 
   const type = acquisition.type?.trim();
+  const formattedDate = formatAcquisitionDate(acquisition.date);
   if (type === 'draft') {
     const pick = safeNumber(acquisition.draftPick);
     const year = safeNumber(acquisition.draftYear);
@@ -161,15 +188,15 @@ function formatAcquisition(player: TeamRosterPlayer): string | null {
   }
   if (type === 'trade') {
     const from = acquisition.fromTeamAbbreviation ? ` from ${acquisition.fromTeamAbbreviation}` : '';
-    const date = acquisition.date ? ` · ${acquisition.date}` : '';
+    const date = formattedDate ? ` · ${formattedDate}` : '';
     return `Traded${from}${date}`;
   }
   if (type === 'signing') {
-    return `Signed${acquisition.date ? ` · ${acquisition.date}` : ''}`;
+    return `Signed${formattedDate ? ` · ${formattedDate}` : ''}`;
   }
   if (type === 'draftRightsTrade') {
     const from = acquisition.fromTeamAbbreviation ? ` from ${acquisition.fromTeamAbbreviation}` : '';
-    const date = acquisition.date ? ` · ${acquisition.date}` : '';
+    const date = formattedDate ? ` · ${formattedDate}` : '';
     return `Draft rights${from}${date}`;
   }
 
@@ -184,17 +211,27 @@ function rankBadge(rank: number | null | undefined, teamAbbreviation: string, la
 
 function getPlayerRankBadges(player: PlayerOverview | undefined, teamAbbreviation: string, rankScope: string | null | undefined): PlayerRankBadge[] {
   if (!player || rankScope !== 'team') return [];
+
+  const gamesPlayed = safeNumber(player.base?.gamesPlayed);
+  const minutesPerGame = safeNumber(player.base?.minutesPerGame);
+  if (gamesPlayed === undefined || gamesPlayed < 10) return [];
+  if (minutesPerGame === undefined || minutesPerGame < 10) return [];
+  const maxBadges = minutesPerGame >= 20 ? 2 : 1;
+
+  const ranksBase = player.ranks.base as { points?: number | null; rebounds?: number | null; assists?: number | null; steals?: number | null; blocks?: number | null } | undefined;
+  const ranksAdvanced = player.ranks.advanced as { trueShootingPct?: number | null; netRating?: number | null } | undefined;
+
   const badges = [
-    rankBadge(player.ranks.base?.points, teamAbbreviation, 'PPG', 1),
-    rankBadge(player.ranks.base?.minutes, teamAbbreviation, 'MIN', 2),
-    rankBadge(player.ranks.base?.assists, teamAbbreviation, 'AST', 3),
-    rankBadge(player.ranks.base?.rebounds, teamAbbreviation, 'REB', 4),
-    rankBadge(player.ranks.advanced?.trueShootingPct, teamAbbreviation, 'TS%', 5),
-    rankBadge(player.ranks.advanced?.usagePct, teamAbbreviation, 'USG', 6),
-    rankBadge(player.ranks.advanced?.netRating, teamAbbreviation, 'NET', 7),
+    rankBadge(ranksBase?.points, teamAbbreviation, 'PPG', 1),
+    rankBadge(ranksBase?.assists, teamAbbreviation, 'AST', 2),
+    rankBadge(ranksBase?.rebounds, teamAbbreviation, 'REB', 3),
+    rankBadge(ranksAdvanced?.trueShootingPct, teamAbbreviation, 'TS%', 4),
+    rankBadge(ranksAdvanced?.netRating, teamAbbreviation, 'NET', 5),
+    rankBadge(ranksBase?.steals, teamAbbreviation, 'STL', 6),
+    rankBadge(ranksBase?.blocks, teamAbbreviation, 'BLK', 7),
   ].filter((badge): badge is PlayerRankBadge => badge !== null);
 
-  return badges.sort((a, b) => a.priority - b.priority).slice(0, 2);
+  return badges.sort((a, b) => a.priority - b.priority).slice(0, maxBadges);
 }
 
 export default function TeamDetailScreen() {
@@ -341,6 +378,7 @@ export default function TeamDetailScreen() {
                 statsUnavailable={!!rosterQuery.statsErrorMessage && !rosterQuery.playersOverview}
                 rankScope={rosterQuery.playersOverview?.rankScope}
                 teamAbbreviation={team.abbreviation}
+                teamColor={team.primaryColor}
               />
             ) : (
               <View style={styles.emptyState}>
@@ -424,6 +462,7 @@ const RosterTabContent = React.memo(function RosterTabContent({
   statsUnavailable,
   rankScope,
   teamAbbreviation,
+  teamColor,
 }: {
   players: HydratedRosterPlayer[];
   isLoading: boolean;
@@ -432,6 +471,7 @@ const RosterTabContent = React.memo(function RosterTabContent({
   statsUnavailable: boolean;
   rankScope: string | null | undefined;
   teamAbbreviation: string;
+  teamColor: string;
 }) {
   if (isLoading && players.length === 0) {
     return (
@@ -476,6 +516,7 @@ const RosterTabContent = React.memo(function RosterTabContent({
           statsUnavailable={statsUnavailable}
           rankScope={rankScope}
           teamAbbreviation={teamAbbreviation}
+          teamColor={teamColor}
         />
       ))}
     </View>
@@ -487,15 +528,18 @@ const RosterPlayerCard = React.memo(function RosterPlayerCard({
   statsUnavailable,
   rankScope,
   teamAbbreviation,
+  teamColor,
 }: {
   player: HydratedRosterPlayer;
   statsUnavailable: boolean;
   rankScope: string | null | undefined;
   teamAbbreviation: string;
+  teamColor: string;
 }) {
   const { roster, stats } = player;
   const acquisitionText = formatAcquisition(roster);
   const badges = getPlayerRankBadges(stats, teamAbbreviation, rankScope);
+  const jerseyColor = jerseyTextColor(teamColor);
   const metadata = [
     formatOptionalText(roster.height),
     formatOptionalText(roster.weight, roster.weight ? ' lbs' : ''),
@@ -506,8 +550,8 @@ const RosterPlayerCard = React.memo(function RosterPlayerCard({
   return (
     <View style={styles.rosterCard}>
       <View style={styles.rosterTopRow}>
-        <View style={styles.jerseyBadge}>
-          <Text style={styles.jerseyText}>{formatOptionalText(roster.jersey)}</Text>
+        <View style={[styles.jerseyBadge, { backgroundColor: teamColor, borderColor: teamColor }]}>
+          <Text style={[styles.jerseyText, { color: jerseyColor }]}>{formatOptionalText(roster.jersey)}</Text>
         </View>
         <View style={styles.rosterIdentity}>
           <View style={styles.rosterNameRow}>
@@ -871,12 +915,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(6,182,212,0.35)',
     borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   rankBadgeText: {
     color: Colors.secondary,
-    fontSize: FontSize.xs,
+    fontSize: 10,
     fontWeight: FontWeight.bold,
   },
   statStrip: {
