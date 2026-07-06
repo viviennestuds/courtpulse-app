@@ -76,6 +76,7 @@ interface CdnPlayByPlayResponse {
 }
 
 export interface CdnPbpAction {
+  source?: string;
   actionNumber: number;
   clock: string;
   timeActual: string;

@@ -343,6 +343,173 @@ export interface ShotEvent {
   points: number;
 }
 
+export interface NbaProxySourceCapabilities {
+  source?: string | null;
+  hasGameShell?: boolean;
+  hasScores?: boolean;
+  hasTeamBoxScore?: boolean;
+  hasPlayerBoxScore?: boolean;
+  hasPlayByPlay?: boolean;
+  hasShotChart?: boolean;
+  usesStatsFallback?: boolean;
+  usesCdn?: boolean;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+export interface StatsGameHydrationResponse {
+  success: boolean;
+  type: 'statsGameHydration';
+  gameId: string;
+  source?: string | null;
+  sourceStatus?: string | null;
+  errorCategory?: string | null;
+  noGamesConfirmed?: boolean;
+  sourceCapabilities?: NbaProxySourceCapabilities | null;
+  game?: StatsHydratedGame | null;
+  boxscore?: StatsHydratedBoxScore | null;
+  playbyplay?: StatsHydratedPlayByPlay | null;
+  attempts?: unknown;
+  fetchedAt?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface StatsRouteResponseBase {
+  success: boolean;
+  type: 'statsBoxScoreTraditionalV3' | 'statsPlayByPlayV3';
+  gameId: string;
+  source?: string | null;
+  sourceStatus?: string | null;
+  errorCategory?: string | null;
+  noGamesConfirmed?: boolean;
+  sourceCapabilities?: NbaProxySourceCapabilities | null;
+  attempts?: unknown;
+  fetchedAt?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface StatsBoxScoreTraditionalV3Response extends StatsRouteResponseBase {
+  type: 'statsBoxScoreTraditionalV3';
+  boxscore?: StatsHydratedBoxScore | null;
+}
+
+export interface StatsPlayByPlayV3Response extends StatsRouteResponseBase {
+  type: 'statsPlayByPlayV3';
+  playbyplay?: StatsHydratedPlayByPlay | null;
+}
+
+export interface StatsHydratedGame {
+  source?: string | null;
+  gameId?: string | number | null;
+  gameStatus?: string | number | null;
+  gameStatusText?: string | null;
+  period?: string | number | null;
+  gameClock?: string | null;
+  inferredFrom?: string | null;
+  homeTeam?: StatsHydratedTeam | null;
+  awayTeam?: StatsHydratedTeam | null;
+}
+
+export interface StatsHydratedTeam {
+  teamId?: string | number | null;
+  teamCity?: string | null;
+  teamName?: string | null;
+  teamTricode?: string | null;
+  teamSlug?: string | null;
+  score?: string | number | null;
+}
+
+export interface StatsHydratedBoxScore {
+  source?: string | null;
+  gameId?: string | number | null;
+  teamCount?: number | null;
+  playerCount?: number | null;
+  activePlayerCount?: number | null;
+  dnpPlayerCount?: number | null;
+  homeTeam?: StatsHydratedTeamBoxScore | null;
+  awayTeam?: StatsHydratedTeamBoxScore | null;
+  teams?: StatsHydratedTeamBoxScore[];
+  players?: StatsHydratedPlayerBoxScore[];
+}
+
+export interface StatsHydratedTeamBoxScore extends StatsHydratedTeam {
+  homeAway?: 'home' | 'away' | string | null;
+  statistics?: Record<string, string | number | null | undefined>;
+  stats?: Record<string, string | number | null | undefined>;
+  starters?: unknown[];
+  bench?: unknown[];
+  minutes?: string | number | null;
+}
+
+export interface StatsHydratedPlayerBoxScore {
+  personId?: string | number | null;
+  playerId?: string | number | null;
+  firstName?: string | null;
+  familyName?: string | null;
+  displayName?: string | null;
+  name?: string | null;
+  nameI?: string | null;
+  playerSlug?: string | null;
+  teamId?: string | number | null;
+  teamCity?: string | null;
+  teamName?: string | null;
+  teamTricode?: string | null;
+  homeAway?: 'home' | 'away' | string | null;
+  position?: string | null;
+  jerseyNum?: string | null;
+  comment?: string | null;
+  starter?: string | number | boolean | null;
+  isStarter?: boolean | null;
+  isActive?: boolean | null;
+  status?: string | null;
+  played?: string | number | boolean | null;
+  minutes?: string | number | null;
+  statistics?: Record<string, string | number | null | undefined>;
+  stats?: Record<string, string | number | null | undefined>;
+}
+
+export interface StatsHydratedPlayByPlay {
+  source?: string | null;
+  actionCount?: number | null;
+  actions?: StatsHydratedPlayByPlayAction[];
+}
+
+export interface StatsHydratedPlayByPlayAction {
+  source?: string | null;
+  actionNumber?: string | number | null;
+  eventNum?: string | number | null;
+  period?: string | number | null;
+  clock?: string | null;
+  timeActual?: string | null;
+  teamId?: string | number | null;
+  teamTricode?: string | null;
+  personId?: string | number | null;
+  playerName?: string | null;
+  playerNameI?: string | null;
+  actionType?: string | null;
+  subType?: string | null;
+  description?: string | null;
+  homeDescription?: string | null;
+  awayDescription?: string | null;
+  neutralDescription?: string | null;
+  score?: string | null;
+  scoreHome?: string | number | null;
+  scoreAway?: string | number | null;
+  isScoreChange?: boolean | null;
+  orderNumber?: string | number | null;
+  possession?: string | number | null;
+  xLegacy?: string | number | null;
+  yLegacy?: string | number | null;
+  shotDistance?: string | number | null;
+  shotResult?: string | null;
+  isFieldGoal?: string | number | boolean | null;
+  shotValue?: string | number | null;
+  location?: string | null;
+  videoAvailable?: boolean | null;
+  actionId?: string | number | null;
+}
+
 export interface ScoringRun {
   id: string;
   teamId: string;

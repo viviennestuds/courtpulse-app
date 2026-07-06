@@ -8,6 +8,7 @@ import { ScoreboardParseResult } from '@/services/nbaScoreboard';
 import { FetchDiagnostics } from '@/services/nbaApi';
 import { detectScoringRuns, detectDroughts, reconstructLineups, computeCustomMetrics, buildGameTimelines, validateTimelineIntegrity } from '@/services/analyticsEngine';
 import { PlayByPlayEvent, ScoringRun, ScoringDrought, LineupSegment, CustomMetric, Team, Player, Game, BoxScorePlayer, CanonicalTimelineSegment, TimelineIntegrityReport } from '@/types';
+import { useFeatureFlag } from './useFeatureFlag';
 
 export interface DebugInfo {
   requestedDate: string;
@@ -195,9 +196,11 @@ function getGameStaleTime(status?: Game['status']): number {
 }
 
 export function useGameDetail(gameId: string) {
+  const statsHydrationFallbackEnabled = useFeatureFlag('game_detail_stats_hydration_enabled');
+
   const boxScoreQuery = useQuery({
-    queryKey: ['boxscore', gameId],
-    queryFn: () => getGameDetail(gameId),
+    queryKey: ['boxscore', gameId, { statsHydrationFallbackEnabled }],
+    queryFn: () => getGameDetail(gameId, statsHydrationFallbackEnabled),
     enabled: !!gameId,
     staleTime: (query) => getGameStaleTime((query.state.data as Awaited<ReturnType<typeof getGameDetail>> | undefined)?.data?.game?.status),
     refetchInterval: (query) => getGameRefreshInterval((query.state.data as Awaited<ReturnType<typeof getGameDetail>> | undefined)?.data?.game?.status),
@@ -208,8 +211,8 @@ export function useGameDetail(gameId: string) {
   const gameStatus = boxScoreQuery.data?.data?.game?.status;
 
   const pbpQuery = useQuery({
-    queryKey: ['playbyplay', gameId],
-    queryFn: () => getPlayByPlay(gameId),
+    queryKey: ['playbyplay', gameId, { statsHydrationFallbackEnabled }],
+    queryFn: () => getPlayByPlay(gameId, statsHydrationFallbackEnabled),
     enabled: !!gameId,
     staleTime: getGameStaleTime(gameStatus),
     refetchInterval: getGameRefreshInterval(gameStatus),

@@ -8,10 +8,13 @@ import {
   getGamesByDate as getProxyGamesByDate,
   getBoxscore as getProxyBoxscore,
   getPlayByPlay as getProxyPlayByPlay,
+  getStatsGameHydration,
   getNbaDataProxyBaseUrl,
   normalizeGamesByDateResponse,
   normalizeProxyBoxscore,
   normalizeProxyPlayByPlay,
+  normalizeStatsHydrationBoxscore,
+  normalizeStatsHydrationPlayByPlay,
 } from './nbaDataProxy';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_NBA_API_URL ?? '';
@@ -164,7 +167,15 @@ export async function getRecentGames(daysBack: number = 3): Promise<DataResult<G
   return { data: allGames, source: 'live', state: allGames.length > 0 ? 'success' : 'empty' };
 }
 
-export async function getGameDetail(gameId: string): Promise<DataResult<GameDetailData | null>> {
+function hasUsefulGameDetailData(data: GameDetailData | null): data is GameDetailData {
+  if (!data?.game) return false;
+  const playerCount = data.homeBoxScore.length + data.awayBoxScore.length;
+  const homeStatCount = Object.keys(data.homeTeamStats).length;
+  const awayStatCount = Object.keys(data.awayTeamStats).length;
+  return playerCount > 0 || homeStatCount > 1 || awayStatCount > 1;
+}
+
+export async function getGameDetail(gameId: string, enableStatsHydrationFallback: boolean = false): Promise<DataResult<GameDetailData | null>> {
   if (hasBackend()) {
     try {
       const data = await fetchBackend<GameDetailData>(`/api/games/${gameId}/boxscore`);
@@ -176,15 +187,34 @@ export async function getGameDetail(gameId: string): Promise<DataResult<GameDeta
 
   const response = await getProxyBoxscore(gameId);
   const data = normalizeProxyBoxscore(response);
-  if (!data) {
-    const reason = response.error ?? response.message ?? response.parseError ?? 'Boxscore unavailable from NBA data proxy';
-    console.warn(`[DataProvider] Proxy boxscore unavailable for ${gameId}: ${reason}`);
-    throw new Error(reason);
+  if (hasUsefulGameDetailData(data)) {
+    return { data, source: 'live', state: 'success' };
   }
-  return { data, source: 'live', state: 'success' };
+
+  const reason = response.error ?? response.message ?? response.parseError ?? 'Boxscore unavailable from NBA data proxy';
+  const shouldTryStatsFallback = enableStatsHydrationFallback && (
+    response.errorCategory === 'cdnAccessDenied'
+    || response.httpStatus === 403
+    || !data
+    || !hasUsefulGameDetailData(data)
+  );
+
+  if (shouldTryStatsFallback) {
+    console.warn(`[DataProvider] Proxy boxscore unavailable for ${gameId}: ${reason}; trying statsGameHydration fallback`);
+    const hydrated = await getStatsGameHydration(gameId);
+    const hydratedData = normalizeStatsHydrationBoxscore(hydrated);
+    if (hasUsefulGameDetailData(hydratedData)) {
+      return { data: hydratedData, source: 'live', state: hydrated.sourceStatus === 'ok' ? 'success' : 'partial' };
+    }
+    const hydratedReason = hydrated.error ?? hydrated.message ?? hydrated.errorCategory ?? 'statsGameHydration did not include usable boxscore data';
+    throw new Error(hydratedReason);
+  }
+
+  console.warn(`[DataProvider] Proxy boxscore unavailable for ${gameId}: ${reason}`);
+  throw new Error(reason);
 }
 
-export async function getPlayByPlay(gameId: string): Promise<DataResult<{
+export async function getPlayByPlay(gameId: string, enableStatsHydrationFallback: boolean = false): Promise<DataResult<{
   events: PlayByPlayEvent[];
   shots: ShotEvent[];
   rawActions: CdnPbpAction[];
@@ -204,12 +234,39 @@ export async function getPlayByPlay(gameId: string): Promise<DataResult<{
 
   const response = await getProxyPlayByPlay(gameId);
   const data = normalizeProxyPlayByPlay(response);
-  if (!data) {
-    const reason = response.error ?? response.message ?? response.parseError ?? 'Play-by-play unavailable from NBA data proxy';
-    console.warn(`[DataProvider] Proxy PBP unavailable for ${gameId}: ${reason}`);
-    throw new Error(reason);
+  const hasPbpData = (data?.events.length ?? 0) > 0 || (data?.rawActions.length ?? 0) > 0;
+  if (data && hasPbpData) {
+    return { data, source: 'live', state: 'success' };
   }
-  return { data, source: 'live', state: data.events.length > 0 || data.rawActions.length > 0 ? 'success' : 'empty' };
+
+  const reason = response.error ?? response.message ?? response.parseError ?? 'Play-by-play unavailable from NBA data proxy';
+  const shouldTryStatsFallback = enableStatsHydrationFallback && (
+    response.errorCategory === 'cdnAccessDenied'
+    || response.httpStatus === 403
+    || !data
+    || !hasPbpData
+  );
+
+  if (shouldTryStatsFallback) {
+    console.warn(`[DataProvider] Proxy PBP unavailable for ${gameId}: ${reason}; trying statsGameHydration fallback`);
+    const hydrated = await getStatsGameHydration(gameId);
+    const hydratedPbp = normalizeStatsHydrationPlayByPlay(hydrated);
+    const hasHydratedPbp = (hydratedPbp?.events.length ?? 0) > 0 || (hydratedPbp?.rawActions.length ?? 0) > 0;
+    if (hydratedPbp && hasHydratedPbp) {
+      return { data: hydratedPbp, source: 'live', state: hydrated.sourceStatus === 'ok' ? 'success' : 'partial' };
+    }
+    if (hydratedPbp) {
+      return { data: hydratedPbp, source: 'live', state: 'empty' };
+    }
+    const hydratedReason = hydrated.error ?? hydrated.message ?? hydrated.errorCategory ?? 'statsGameHydration did not include usable play-by-play data';
+    throw new Error(hydratedReason);
+  }
+
+  if (data) {
+    return { data, source: 'live', state: 'empty' };
+  }
+  console.warn(`[DataProvider] Proxy PBP unavailable for ${gameId}: ${reason}`);
+  throw new Error(reason);
 }
 
 export async function getTeams(): Promise<TeamsDataResult> {

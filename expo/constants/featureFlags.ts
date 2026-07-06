@@ -342,6 +342,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     channel: 'stable',
     defaultEnabled: true,
   },
+  {
+    key: 'game_detail_stats_hydration_enabled',
+    label: 'Game Detail Stats Hydration Fallback',
+    description: 'Use statsGameHydration from nba-data-proxy to restore Game Detail data when CDN individual-game routes are unavailable.',
+    channel: 'stable',
+    defaultEnabled: true,
+  },
 ] as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[number]['key'];
