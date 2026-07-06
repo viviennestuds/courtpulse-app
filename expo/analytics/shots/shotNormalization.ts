@@ -49,9 +49,10 @@ function gameTimeElapsed(period: number, clockSeconds: number): number {
 }
 
 function normalizeCoordinates(action: CdnPbpAction): { x: number | null; y: number | null } {
-  if (action.xLegacy != null && action.yLegacy != null) {
-    const x = (action.xLegacy + 250) / 500;
-    const y = action.yLegacy / 470;
+  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy) && (action.xLegacy !== 0 || action.yLegacy !== 0);
+  if (hasLegacyCoordinates) {
+    const x = ((action.xLegacy ?? 0) + 250) / 500;
+    const y = (action.yLegacy ?? 0) / 470;
     return {
       x: Math.max(0, Math.min(1, x)),
       y: Math.max(0, Math.min(1, y)),
@@ -198,8 +199,8 @@ export function normalizeShotEvents(
     const shot: CanonicalShotEvent = {
       id: `shot-${gameId}-${action.actionNumber}`,
       gameId,
-      eventNum: action.actionNumber,
-      gameEventId: action.actionNumber,
+      eventNum: action.eventNum ?? action.actionNumber,
+      gameEventId: action.eventNum ?? action.actionNumber,
       season: deriveSeasonFromGameId(gameId),
 
       teamId: teamIdStr,

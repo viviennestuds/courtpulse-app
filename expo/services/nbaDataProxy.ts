@@ -121,6 +121,7 @@ interface ProxyBoxScorePlayerShape {
   status?: string | null;
   order?: string | number | null;
   personId?: string | number | null;
+  playerId?: string | number | null;
   jerseyNum?: string | null;
   position?: string | null;
   starter?: string | number | boolean | null;
@@ -132,9 +133,14 @@ interface ProxyBoxScorePlayerShape {
   statistics?: Record<string, string | number | null | undefined>;
   stats?: Record<string, string | number | null | undefined>;
   name?: string | null;
+  displayName?: string | null;
   nameI?: string | null;
   firstName?: string | null;
   familyName?: string | null;
+  playerSlug?: string | null;
+  teamId?: string | number | null;
+  teamTricode?: string | null;
+  homeAway?: string | null;
 }
 
 interface ProxyPbpActionShape {
@@ -169,6 +175,10 @@ interface ProxyPbpActionShape {
   personIdsFilter?: unknown;
   assistPersonId?: string | number | null;
   assistPlayerNameInitial?: string | null;
+  location?: string | null;
+  videoAvailable?: boolean | null;
+  actionId?: string | number | null;
+  eventNum?: string | number | null;
 }
 
 export interface NormalizedGamesByDateResult {
@@ -341,13 +351,17 @@ function normalizeProxyGame(game: ProxyGameShape, requestedDate: string): Game {
   };
 }
 
+function getCanonicalDisplayName(player: Pick<ProxyBoxScorePlayerShape, 'displayName' | 'nameI' | 'firstName' | 'familyName' | 'name'>): string {
+  const firstLastName = `${toStringValue(player.firstName).trim()} ${toStringValue(player.familyName).trim()}`.trim();
+  return toStringValue(player.displayName || player.nameI || firstLastName || player.name);
+}
+
 function transformBoxScorePlayer(player: ProxyBoxScorePlayerShape): BoxScorePlayer {
   const stats = (player.statistics ?? player.stats ?? {}) as Record<string, unknown>;
-  const firstLastName = `${toStringValue(player.firstName).trim()} ${toStringValue(player.familyName).trim()}`.trim();
   const starterValue = player.isStarter ?? player.starter;
   return {
-    playerId: toStringValue(player.personId ?? (player as { playerId?: unknown }).playerId),
-    name: toStringValue(player.nameI || player.name || (player as { displayName?: unknown }).displayName || firstLastName),
+    playerId: toStringValue(player.personId ?? player.playerId),
+    name: getCanonicalDisplayName(player),
     position: toStringValue(player.position),
     minutes: parsePTMinutes(toStringValue(stats.minutes ?? (player as { minutes?: unknown }).minutes)),
     points: pickNumber(stats, ['points']),
@@ -411,8 +425,6 @@ function extractTeamStats(team: ProxyTeamShape | null | undefined): Record<strin
     blocks: pickNumber(stats, ['blocks']),
     turnovers: pickNumber(stats, ['turnovers']),
     foulsPersonal: pickNumber(stats, ['foulsPersonal', 'fouls']),
-    pointsFastBreak: pickNumber(stats, ['pointsFastBreak']),
-    pointsInThePaint: pickNumber(stats, ['pointsInThePaint']),
   };
 
   return {
@@ -422,6 +434,10 @@ function extractTeamStats(team: ProxyTeamShape | null | undefined): Record<strin
 }
 
 function normalizePbpAction(action: ProxyPbpActionShape): CdnPbpAction {
+  const x = toOptionalNumber(action.x);
+  const y = toOptionalNumber(action.y);
+  const xLegacy = toOptionalNumber(action.xLegacy);
+  const yLegacy = toOptionalNumber(action.yLegacy);
   return {
     source: (action as { source?: string }).source,
     actionNumber: toNumber(action.actionNumber),
@@ -435,8 +451,8 @@ function normalizePbpAction(action: ProxyPbpActionShape): CdnPbpAction {
     subType: toStringValue(action.subType),
     qualifiers: toStringArray(action.qualifiers),
     personId: toNumber(action.personId),
-    x: toNumber(action.x),
-    y: toNumber(action.y),
+    x,
+    y,
     area: toStringValue(action.area),
     areaDetail: toStringValue(action.areaDetail),
     side: toStringValue(action.side),
@@ -444,8 +460,8 @@ function normalizePbpAction(action: ProxyPbpActionShape): CdnPbpAction {
     possession: toNumber(action.possession),
     scoreHome: toStringValue(action.scoreHome, '0'),
     scoreAway: toStringValue(action.scoreAway, '0'),
-    xLegacy: toNumber(action.xLegacy),
-    yLegacy: toNumber(action.yLegacy),
+    xLegacy,
+    yLegacy,
     isFieldGoal: action.isFieldGoal === true ? 1 : toNumber(action.isFieldGoal),
     shotResult: toStringValue(action.shotResult),
     pointsTotal: toNumber(action.pointsTotal),
@@ -455,6 +471,10 @@ function normalizePbpAction(action: ProxyPbpActionShape): CdnPbpAction {
     personIdsFilter: Array.isArray(action.personIdsFilter) ? action.personIdsFilter.map(item => toNumber(item)) : [],
     assistPersonId: action.assistPersonId != null ? toNumber(action.assistPersonId) : undefined,
     assistPlayerNameInitial: action.assistPlayerNameInitial ?? undefined,
+    location: action.location ?? undefined,
+    videoAvailable: action.videoAvailable ?? undefined,
+    actionId: action.actionId ?? undefined,
+    eventNum: toOptionalNumber(action.eventNum ?? action.actionNumber),
   };
 }
 
@@ -516,8 +536,8 @@ function transformShotFromAction(action: CdnPbpAction): ShotEvent | null {
   const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy) && (action.xLegacy !== 0 || action.yLegacy !== 0);
   const hasNormalizedCoordinates = Number.isFinite(action.x) && Number.isFinite(action.y) && (action.x !== 0 || action.y !== 0);
   if (!hasLegacyCoordinates && !hasNormalizedCoordinates) return null;
-  const x = hasLegacyCoordinates ? (action.xLegacy + 250) / 500 : action.x / 100;
-  const y = hasLegacyCoordinates ? action.yLegacy / 470 : action.y / 100;
+  const x = hasLegacyCoordinates ? ((action.xLegacy ?? 0) + 250) / 500 : (action.x ?? 0) / 100;
+  const y = hasLegacyCoordinates ? (action.yLegacy ?? 0) / 470 : (action.y ?? 0) / 100;
   const shotType = action.actionType === '3pt' ? '3PT' : action.subType || action.actionType || 'Shot';
   return {
     id: `shot-${action.actionNumber}`,
@@ -579,6 +599,7 @@ function statsPlayerToProxyPlayer(player: StatsHydratedPlayerBoxScore): ProxyBox
   return {
     status: player.status,
     personId: player.personId ?? player.playerId,
+    playerId: player.playerId ?? player.personId,
     jerseyNum: player.jerseyNum,
     position: player.position,
     starter: player.starter ?? player.isStarter,
@@ -591,10 +612,15 @@ function statsPlayerToProxyPlayer(player: StatsHydratedPlayerBoxScore): ProxyBox
       ...(player.stats ?? {}),
       minutes: player.stats?.minutes ?? player.statistics?.minutes ?? player.minutes,
     },
-    name: player.name ?? player.displayName,
+    name: player.name,
+    displayName: player.displayName,
     nameI: player.nameI,
     firstName: player.firstName,
     familyName: player.familyName,
+    playerSlug: player.playerSlug,
+    teamId: player.teamId,
+    teamTricode: player.teamTricode,
+    homeAway: player.homeAway,
   };
 }
 
@@ -633,7 +659,7 @@ function normalizeStatsActionType(action: StatsHydratedPlayByPlayAction): { acti
   }
   if (lowerActionType.includes('shot')) {
     const isThree = shotValue === 3 || description.includes('3pt') || rawSubType.toLowerCase().includes('3pt') || toNumber(action.shotDistance) >= 22;
-    return { actionType: isThree ? '3pt' : '2pt', subType: rawSubType, shotResult: isMade ? 'made' : 'missed', isFieldGoal: 0, pointsTotal: isMade ? (isThree ? 3 : 2) : 0 };
+    return { actionType: isThree ? '3pt' : '2pt', subType: rawSubType, shotResult: isMade ? 'made' : 'missed', isFieldGoal: 1, pointsTotal: isMade ? (isThree ? 3 : 2) : 0 };
   }
   if (lowerActionType.includes('turnover')) return { actionType: 'turnover', subType: rawSubType, shotResult: '', isFieldGoal: 0, pointsTotal: 0 };
   if (lowerActionType.includes('foul')) return { actionType: 'foul', subType: rawSubType, shotResult: '', isFieldGoal: 0, pointsTotal: 0 };
@@ -654,14 +680,131 @@ function playerInitialName(name: string): string {
   return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
 }
 
+interface CanonicalStatsPlayerIdentity {
+  personId: string;
+  playerId: string;
+  displayName: string;
+  nameI: string;
+  rawNames: string[];
+  teamId: string;
+  teamTricode: string;
+  homeAway: string;
+}
+
+interface CanonicalStatsPlayerIdentityMap {
+  byId: Map<string, CanonicalStatsPlayerIdentity>;
+  byName: Map<string, CanonicalStatsPlayerIdentity[]>;
+  byTeamName: Map<string, CanonicalStatsPlayerIdentity>;
+}
+
+function normalizeNameKey(value: unknown): string {
+  return toStringValue(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildCanonicalStatsPlayerIdentities(boxscore: StatsHydratedBoxScore | null | undefined): CanonicalStatsPlayerIdentityMap {
+  const byId = new Map<string, CanonicalStatsPlayerIdentity>();
+  const byName = new Map<string, CanonicalStatsPlayerIdentity[]>();
+  const byTeamName = new Map<string, CanonicalStatsPlayerIdentity>();
+
+  const addName = (identity: CanonicalStatsPlayerIdentity, value: unknown) => {
+    const key = normalizeNameKey(value);
+    if (!key) return;
+    const existing = byName.get(key) ?? [];
+    if (!existing.some(player => player.playerId === identity.playerId)) {
+      existing.push(identity);
+      byName.set(key, existing);
+    }
+    if (identity.teamId) byTeamName.set(`${identity.teamId}:${key}`, identity);
+  };
+
+  for (const player of boxscore?.players ?? []) {
+    const proxyPlayer = statsPlayerToProxyPlayer(player);
+    const playerId = toStringValue(player.playerId ?? player.personId);
+    const personId = toStringValue(player.personId ?? player.playerId);
+    if (!playerId && !personId) continue;
+    const displayName = getCanonicalDisplayName(proxyPlayer);
+    const nameI = toStringValue(player.nameI) || playerInitialName(displayName);
+    const identity: CanonicalStatsPlayerIdentity = {
+      personId: personId || playerId,
+      playerId: playerId || personId,
+      displayName: displayName || nameI,
+      nameI: nameI || displayName,
+      rawNames: [player.displayName, player.nameI, player.name, `${toStringValue(player.firstName)} ${toStringValue(player.familyName)}`].map(value => toStringValue(value)).filter(Boolean),
+      teamId: toStringValue(player.teamId),
+      teamTricode: toStringValue(player.teamTricode),
+      homeAway: toStringValue(player.homeAway),
+    };
+    if (identity.personId) byId.set(identity.personId, identity);
+    if (identity.playerId) byId.set(identity.playerId, identity);
+    addName(identity, player.displayName);
+    addName(identity, player.nameI);
+    addName(identity, player.name);
+    addName(identity, `${toStringValue(player.firstName)} ${toStringValue(player.familyName)}`);
+    addName(identity, player.familyName);
+  }
+
+  return { byId, byName, byTeamName };
+}
+
+function resolveCanonicalStatsPlayer(
+  identities: CanonicalStatsPlayerIdentityMap | undefined,
+  id: unknown,
+  rawName: unknown,
+  teamId: unknown,
+): CanonicalStatsPlayerIdentity | undefined {
+  if (!identities) return undefined;
+  const idKey = toStringValue(id);
+  if (idKey && idKey !== '0') {
+    const byId = identities.byId.get(idKey);
+    if (byId) return byId;
+  }
+  const nameKey = normalizeNameKey(rawName);
+  if (!nameKey) return undefined;
+  const teamKey = `${toStringValue(teamId)}:${nameKey}`;
+  const byTeamName = identities.byTeamName.get(teamKey);
+  if (byTeamName) return byTeamName;
+  const candidates = identities.byName.get(nameKey) ?? [];
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function extractShotDistanceFromDescription(description: string): number | undefined {
+  const match = description.match(/(\d+)\s*'/);
+  if (!match) return undefined;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function extractAssistNameFromDescription(description: string): string | null {
+  const matches = Array.from(description.matchAll(/\(([^()]+?)\s+\d+\s+AST\)/gi));
+  const last = matches.at(-1)?.[1]?.trim();
+  return last && /^[A-Za-zÀ-ž.'\- ]+$/.test(last) ? last : null;
+}
+
 function buildStatsCdnAction(
   action: StatsHydratedPlayByPlayAction,
   actionNumber: number,
   scoreHome: string,
   scoreAway: string,
   overrides: Partial<CdnPbpAction> = {},
+  identities?: CanonicalStatsPlayerIdentityMap,
 ): CdnPbpAction {
   const mapped = normalizeStatsActionType(action);
+  const description = toStringValue(action.description ?? action.homeDescription ?? action.awayDescription ?? action.neutralDescription);
+  const shooter = resolveCanonicalStatsPlayer(identities, action.personId, action.playerName, action.teamId);
+  const rawAssistName = mapped.isFieldGoal === 1 && mapped.shotResult === 'made'
+    ? extractAssistNameFromDescription(description)
+    : null;
+  const assist = rawAssistName ? resolveCanonicalStatsPlayer(identities, null, rawAssistName, action.teamId) : undefined;
+  const shotDistance = toOptionalNumber(action.shotDistance) ?? extractShotDistanceFromDescription(description) ?? 0;
+  const xLegacy = toOptionalNumber(action.xLegacy);
+  const yLegacy = toOptionalNumber(action.yLegacy);
   return {
     source: action.source ?? 'statsGameHydration',
     actionNumber,
@@ -670,61 +813,75 @@ function buildStatsCdnAction(
     period: toNumber(action.period),
     periodType: '',
     teamId: toNumber(action.teamId),
-    teamTricode: toStringValue(action.teamTricode),
+    teamTricode: toStringValue(action.teamTricode) || shooter?.teamTricode || '',
     actionType: mapped.actionType,
     subType: mapped.subType,
     qualifiers: [],
-    personId: toNumber(action.personId),
-    x: 0,
-    y: 0,
+    personId: toNumber(shooter?.personId ?? action.personId),
+    x: undefined,
+    y: undefined,
     area: '',
     areaDetail: '',
     side: '',
-    shotDistance: toNumber(action.shotDistance),
+    shotDistance,
     possession: toNumber(action.possession),
     scoreHome,
     scoreAway,
-    xLegacy: 0,
-    yLegacy: 0,
+    xLegacy,
+    yLegacy,
+    location: action.location ?? undefined,
+    videoAvailable: action.videoAvailable ?? undefined,
+    actionId: action.actionId ?? undefined,
+    eventNum: toOptionalNumber(action.eventNum ?? action.actionNumber),
     isFieldGoal: mapped.isFieldGoal,
     shotResult: mapped.shotResult,
     pointsTotal: mapped.pointsTotal,
-    playerName: toStringValue(action.playerName),
-    playerNameI: toStringValue(action.playerNameI) || playerInitialName(toStringValue(action.playerName)),
-    description: toStringValue(action.description ?? action.homeDescription ?? action.awayDescription ?? action.neutralDescription),
-    personIdsFilter: action.personId != null ? [toNumber(action.personId)] : [],
+    playerName: shooter?.displayName ?? toStringValue(action.playerName),
+    playerNameI: shooter?.nameI ?? (toStringValue(action.playerNameI) || playerInitialName(toStringValue(action.playerName))),
+    description,
+    personIdsFilter: Array.from(new Set([toNumber(shooter?.personId ?? action.personId), toNumber(assist?.personId)].filter(id => id > 0))),
+    assistPersonId: assist ? toNumber(assist.personId) : undefined,
+    assistPlayerNameInitial: assist?.nameI,
     ...overrides,
   };
 }
 
-function expandStatsSubstitutionAction(action: StatsHydratedPlayByPlayAction, actionNumber: number, scoreHome: string, scoreAway: string): CdnPbpAction[] | null {
+function expandStatsSubstitutionAction(
+  action: StatsHydratedPlayByPlayAction,
+  actionNumber: number,
+  scoreHome: string,
+  scoreAway: string,
+  identities?: CanonicalStatsPlayerIdentityMap,
+): CdnPbpAction[] | null {
   if (!toStringValue(action.actionType).toLowerCase().includes('substitution')) return null;
   const description = toStringValue(action.description);
   const match = description.match(/SUB:\s*(.+?)\s+FOR\s+(.+)$/i);
-  if (!match) return [buildStatsCdnAction(action, actionNumber, scoreHome, scoreAway, { subType: '' })];
+  if (!match) return [buildStatsCdnAction(action, actionNumber, scoreHome, scoreAway, { subType: '' }, identities)];
   const incoming = match[1].trim();
   const outgoing = match[2].trim();
-  const outgoingName = toStringValue(action.playerName) || outgoing;
+  const outgoingIdentity = resolveCanonicalStatsPlayer(identities, action.personId, outgoing || action.playerName, action.teamId);
+  const incomingIdentity = resolveCanonicalStatsPlayer(identities, null, incoming, action.teamId);
   return [
     buildStatsCdnAction(action, actionNumber * 10, scoreHome, scoreAway, {
       subType: 'out',
-      playerName: outgoingName,
-      playerNameI: outgoing,
-      personIdsFilter: action.personId != null ? [toNumber(action.personId)] : [],
-      description: `SUB OUT: ${outgoing}`,
-    }),
+      personId: toNumber(outgoingIdentity?.personId ?? action.personId),
+      playerName: outgoingIdentity?.displayName ?? (toStringValue(action.playerName) || outgoing),
+      playerNameI: outgoingIdentity?.nameI ?? playerInitialName(outgoing),
+      personIdsFilter: [toNumber(outgoingIdentity?.personId ?? action.personId)].filter(id => id > 0),
+      description: `SUB OUT: ${outgoingIdentity?.nameI ?? outgoing}`,
+    }, identities),
     buildStatsCdnAction(action, actionNumber * 10 + 1, scoreHome, scoreAway, {
       subType: 'in',
-      personId: 0,
-      playerName: incoming,
-      playerNameI: incoming,
-      personIdsFilter: [],
-      description: `SUB IN: ${incoming}`,
-    }),
+      personId: toNumber(incomingIdentity?.personId),
+      playerName: incomingIdentity?.displayName ?? incoming,
+      playerNameI: incomingIdentity?.nameI ?? playerInitialName(incoming),
+      personIdsFilter: [toNumber(incomingIdentity?.personId)].filter(id => id > 0),
+      description: `SUB IN: ${incomingIdentity?.nameI ?? incoming}`,
+    }, identities),
   ];
 }
 
-function normalizeStatsHydratedActions(actions: StatsHydratedPlayByPlayAction[]): CdnPbpAction[] {
+function normalizeStatsHydratedActions(actions: StatsHydratedPlayByPlayAction[], identities?: CanonicalStatsPlayerIdentityMap): CdnPbpAction[] {
   const normalized: CdnPbpAction[] = [];
   let lastHomeScore = '0';
   let lastAwayScore = '0';
@@ -734,7 +891,27 @@ function normalizeStatsHydratedActions(actions: StatsHydratedPlayByPlayAction[])
     if (action.scoreHome != null) lastHomeScore = scoreHome;
     if (action.scoreAway != null) lastAwayScore = scoreAway;
     const actionNumber = toNumber(action.actionNumber ?? action.eventNum ?? action.orderNumber);
-    normalized.push(buildStatsCdnAction(action, actionNumber, scoreHome, scoreAway));
+    const expandedSubstitution = expandStatsSubstitutionAction(action, actionNumber, scoreHome, scoreAway, identities);
+    if (expandedSubstitution) {
+      normalized.push(...expandedSubstitution);
+    } else {
+      normalized.push(buildStatsCdnAction(action, actionNumber, scoreHome, scoreAway, {}, identities));
+    }
+  }
+  if (__DEV__) {
+    const statsActions = normalized.filter(action => action.source === 'statsGameHydration');
+    const assistedMakes = statsActions.filter(action => action.assistPersonId && action.shotResult === 'made').slice(0, 3);
+    const plottableShots = statsActions.filter(action => action.isFieldGoal && Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy)).length;
+    const substitutions = statsActions.filter(action => action.actionType === 'substitution').length;
+    console.log('[StatsHydrationAdapter] normalized actions=%d assistedMakes=%d plottableShots=%d substitutions=%d', statsActions.length, assistedMakes.length, plottableShots, substitutions);
+    assistedMakes.forEach(action => {
+      console.log('[StatsHydrationAdapter][assist]', {
+        shooter: action.playerNameI,
+        assister: action.assistPlayerNameInitial,
+        assistPersonId: action.assistPersonId,
+        description: action.description,
+      });
+    });
   }
   return normalized;
 }
@@ -753,7 +930,8 @@ export function normalizeStatsHydrationBoxscore(response: StatsGameHydrationResp
 
 export function normalizeStatsHydrationPlayByPlay(response: StatsGameHydrationResponse): { events: PlayByPlayEvent[]; shots: ShotEvent[]; rawActions: CdnPbpAction[] } | null {
   if (!response.success || !response.playbyplay) return null;
-  const actions = normalizeStatsHydratedActions(response.playbyplay.actions ?? []);
+  const identities = buildCanonicalStatsPlayerIdentities(response.boxscore);
+  const actions = normalizeStatsHydratedActions(response.playbyplay.actions ?? [], identities);
   const filteredActions = actions.filter(action => {
     const actionType = action.actionType?.toLowerCase();
     return actionType !== 'period' && actionType !== 'game' && actionType !== 'jumpball' && actionType !== 'stoppage';

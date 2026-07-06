@@ -907,6 +907,19 @@ function MatchupFilmRoom({
       season,
       seasonType,
     });
+    if (__DEV__) {
+      console.log('[MatchupFilmRoom] URL inputs', {
+        gameId,
+        offensivePlayerName: offensivePlayer.name,
+        offensivePlayerId: offensivePlayer.playerId,
+        defensivePlayerName: defensivePlayer.name,
+        defensivePlayerId: defensivePlayer.playerId,
+        defensiveTeamId: defensivePlayer.teamId,
+        season,
+        seasonType,
+        url,
+      });
+    }
     try {
       console.log('[MatchupFilmRoom] Opening', url);
       await WebBrowser.openBrowserAsync(url);

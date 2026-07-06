@@ -88,8 +88,8 @@ export interface CdnPbpAction {
   subType: string;
   qualifiers: string[];
   personId: number;
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   area: string;
   areaDetail: string;
   side: string;
@@ -97,8 +97,12 @@ export interface CdnPbpAction {
   possession: number;
   scoreHome: string;
   scoreAway: string;
-  xLegacy: number;
-  yLegacy: number;
+  xLegacy?: number;
+  yLegacy?: number;
+  location?: string;
+  videoAvailable?: boolean;
+  actionId?: string | number;
+  eventNum?: number;
   isFieldGoal: number;
   shotResult: string;
   pointsTotal: number;
@@ -214,8 +218,12 @@ function transformShotFromAction(action: CdnPbpAction): ShotEvent | null {
   if (!action.isFieldGoal) return null;
   if (action.actionType === 'freethrow') return null;
 
-  const x = action.xLegacy != null ? (action.xLegacy + 250) / 500 : action.x / 100;
-  const y = action.yLegacy != null ? action.yLegacy / 470 : action.y / 100;
+  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy) && (action.xLegacy !== 0 || action.yLegacy !== 0);
+  const hasNormalizedCoordinates = Number.isFinite(action.x) && Number.isFinite(action.y) && (action.x !== 0 || action.y !== 0);
+  if (!hasLegacyCoordinates && !hasNormalizedCoordinates) return null;
+
+  const x = hasLegacyCoordinates ? ((action.xLegacy ?? 0) + 250) / 500 : (action.x ?? 0) / 100;
+  const y = hasLegacyCoordinates ? (action.yLegacy ?? 0) / 470 : (action.y ?? 0) / 100;
 
   let shotType = action.subType || action.actionType;
   if (action.actionType === '3pt') shotType = '3PT';

@@ -545,11 +545,11 @@ function SummaryTab({ game, homeBoxScore, awayBoxScore, homeTeamStats, awayTeamS
             )}
             <StatBar label="Steals" homeValue={homeTeamStats.steals ?? 0} awayValue={awayTeamStats.steals ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             <StatBar label="Blocks" homeValue={homeTeamStats.blocks ?? 0} awayValue={awayTeamStats.blocks ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Paint PTS" homeValue={homeTeamStats.pointsInThePaint ?? 0} awayValue={awayTeamStats.pointsInThePaint ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            <StatBar label="Paint PTS" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsInThePaint')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsInThePaint')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             {(hasTeamStat(homeTeamStats, 'pointsSecondChance') || hasTeamStat(awayTeamStats, 'pointsSecondChance')) && (
               <StatBar label="2ND CHANCE" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsSecondChance')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsSecondChance')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             )}
-            <StatBar label="Fast Break" homeValue={homeTeamStats.pointsFastBreak ?? 0} awayValue={awayTeamStats.pointsFastBreak ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
+            <StatBar label="Fast Break" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsFastBreak')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsFastBreak')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             {(hasTeamStat(homeTeamStats, 'benchPoints') || hasTeamStat(awayTeamStats, 'benchPoints')) && (
               <StatBar label="BENCH PTS" homeValue={getOptionalTeamStat(homeTeamStats, 'benchPoints')} awayValue={getOptionalTeamStat(awayTeamStats, 'benchPoints')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
             )}
@@ -636,14 +636,14 @@ function TeamStatsSingle({ stats, score, color }: {
     rows.push(
       { label: 'Steals', key: 'steals', value: stats.steals ?? 0 },
       { label: 'Blocks', key: 'blocks', value: stats.blocks ?? 0 },
-      { label: 'Paint PTS', key: 'pointsInThePaint', value: stats.pointsInThePaint ?? 0 },
+      { label: 'Paint PTS', key: 'pointsInThePaint', value: getOptionalTeamStat(stats, 'pointsInThePaint') },
     );
 
     if (hasTeamStat(stats, 'pointsSecondChance')) {
       rows.push({ label: '2ND CHANCE', key: 'pointsSecondChance', value: stats.pointsSecondChance });
     }
 
-    rows.push({ label: 'Fast Break', key: 'pointsFastBreak', value: stats.pointsFastBreak ?? 0 });
+    rows.push({ label: 'Fast Break', key: 'pointsFastBreak', value: getOptionalTeamStat(stats, 'pointsFastBreak') });
 
     if (hasTeamStat(stats, 'benchPoints')) {
       rows.push({ label: 'BENCH PTS', key: 'benchPoints', value: stats.benchPoints });

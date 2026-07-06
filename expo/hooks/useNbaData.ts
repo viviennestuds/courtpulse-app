@@ -306,8 +306,25 @@ export function useGameAnalytics(
     if (!timelines) return null;
     const home = validateTimelineIntegrity(timelines.homeTimeline, homeTeamId, homeBoxScore, true);
     const away = validateTimelineIntegrity(timelines.awayTimeline, awayTeamId, awayBoxScore, false);
+    if (__DEV__ && rawActions.some(action => action.source === 'statsGameHydration')) {
+      const statsActions = rawActions.filter(action => action.source === 'statsGameHydration');
+      const substitutions = statsActions.filter(action => action.actionType === 'substitution');
+      console.log('[StatsHydrationLineupAudit]', {
+        substitutionsParsed: substitutions.length,
+        homeStarters: homeStarters.length,
+        awayStarters: awayStarters.length,
+        homeSegments: timelines.homeTimeline.length,
+        awaySegments: timelines.awayTimeline.length,
+        homeGaps: home.gapCount,
+        awayGaps: away.gapCount,
+        homeOverlaps: home.overlapCount,
+        awayOverlaps: away.overlapCount,
+        homeInvalidLineups: home.invalidLineupCount,
+        awayInvalidLineups: away.invalidLineupCount,
+      });
+    }
     return { home, away };
-  }, [timelines, homeTeamId, awayTeamId, homeBoxScore, awayBoxScore]);
+  }, [timelines, homeTeamId, awayTeamId, homeBoxScore, awayBoxScore, rawActions, homeStarters, awayStarters]);
 
   const runs = useMemo<ScoringRun[]>(() => {
     if (events.length === 0) return [];
