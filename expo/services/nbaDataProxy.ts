@@ -1,4 +1,4 @@
-import { BoxScorePlayer, Game, PlayByPlayEvent, ShotEvent, StatsBoxScoreTraditionalV3Response, StatsGameHydrationResponse, StatsHydratedBoxScore, StatsHydratedGame, StatsHydratedPlayByPlayAction, StatsHydratedPlayerBoxScore, StatsHydratedTeam, StatsHydratedTeamBoxScore, StatsPlayByPlayV3Response } from '@/types';
+import { BoxScorePlayer, Game, OfficialAdvancedPlayer, OfficialAdvancedTeam, OfficialGameAdvancedStats, PlayByPlayEvent, ShotEvent, StatsBoxScoreTraditionalV3Response, StatsGameHydrationResponse, StatsHydratedAdvancedPlayerStats, StatsHydratedAdvancedTeamStats, StatsHydratedBoxScore, StatsHydratedGame, StatsHydratedMisc, StatsHydratedPlayByPlayAction, StatsHydratedPlayerBoxScore, StatsHydratedTeam, StatsHydratedTeamBoxScore, StatsHydratedTeamPair, StatsHydratedTeamStats, StatsPlayByPlayV3Response } from '@/types';
 import { getTeamColor, getTeamInfoById } from '@/constants/nbaTeams';
 import {
   formatGameDate,
@@ -28,7 +28,7 @@ export interface NbaDataProxyBaseResponse {
   sourceStatus?: string | null;
   errorCategory?: string | null;
   noGamesConfirmed?: boolean;
-  sourceCapabilities?: Record<string, string | number | boolean | null | undefined> | null;
+  sourceCapabilities?: Record<string, unknown> | null;
   sourceUrl?: string;
   httpStatus?: number;
   statusText?: string;
@@ -66,14 +66,22 @@ export interface ProxyGameShape {
   gameDateUTC?: string | null;
   gameEt?: string | null;
   gameTimeLocal?: string | null;
+  duration?: string | null;
+  sellout?: string | number | boolean | null;
   seriesGameNumber?: string | null;
+  gameLabel?: string | null;
+  gameSubLabel?: string | null;
   seriesText?: string | null;
+  ifNecessary?: boolean | null;
   arena?: {
     arenaName?: string | null;
     arenaCity?: string | null;
     arenaState?: string | null;
   } | null;
   attendance?: string | number | null;
+  officials?: Game['officials'];
+  broadcasters?: Game['broadcasters'];
+  availability?: Game['availability'];
   homeTeam?: ProxyTeamShape | null;
   awayTeam?: ProxyTeamShape | null;
   scheduleGame?: ProxyGameShape | null;
@@ -294,6 +302,13 @@ function toStringArray(value: unknown): string[] {
   return value.map(item => String(item));
 }
 
+function toOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1') return true;
+  if (value === 0 || value === '0') return false;
+  return undefined;
+}
+
 function pickGameDate(game: ProxyGameShape, requestedDate: string): string {
   return game.primaryDate
     ?? game.gameCodeDate
@@ -333,6 +348,8 @@ function normalizeProxyGame(game: ProxyGameShape, requestedDate: string): Game {
   const arenaName = toStringValue(arena?.arenaName);
   const arenaCity = toStringValue(arena?.arenaCity);
   const seriesGameNumber = scheduleGame?.seriesGameNumber ?? game.seriesGameNumber ?? undefined;
+  const gameLabel = scheduleGame?.gameLabel ?? game.gameLabel ?? undefined;
+  const gameSubLabel = scheduleGame?.gameSubLabel ?? game.gameSubLabel ?? undefined;
   const seriesText = scheduleGame?.seriesText ?? game.seriesText ?? undefined;
 
   return {
@@ -345,9 +362,20 @@ function normalizeProxyGame(game: ProxyGameShape, requestedDate: string): Game {
     awayTeam: teamToGameTeam(game.awayTeam ?? scheduleGame?.awayTeam),
     arena: arenaName ? (arenaCity ? `${arenaName}, ${arenaCity}` : arenaName) : '',
     attendance: game.attendance != null ? toNumber(game.attendance) : undefined,
-    isPlayoff: toStringValue(game.gameId ?? scheduleGame?.gameId).startsWith('004') || !!seriesGameNumber || !!seriesText,
+    isPlayoff: toStringValue(game.gameId ?? scheduleGame?.gameId).startsWith('004') || !!seriesGameNumber || !!gameLabel || !!seriesText,
+    gameCode: game.gameCode ?? scheduleGame?.gameCode ?? undefined,
+    gameTimeUTC: game.gameTimeUTC ?? scheduleGame?.gameTimeUTC ?? undefined,
+    gameEt: game.gameEt ?? scheduleGame?.gameEt ?? undefined,
+    duration: game.duration ?? scheduleGame?.duration ?? undefined,
+    sellout: toOptionalBoolean(game.sellout ?? scheduleGame?.sellout),
     seriesGameNumber,
+    gameLabel,
+    gameSubLabel,
     seriesText,
+    ifNecessary: game.ifNecessary ?? scheduleGame?.ifNecessary ?? undefined,
+    officials: game.officials ?? scheduleGame?.officials,
+    broadcasters: game.broadcasters ?? scheduleGame?.broadcasters,
+    availability: game.availability ?? scheduleGame?.availability,
   };
 }
 
@@ -533,8 +561,8 @@ function transformPbpAction(action: CdnPbpAction, index: number): PlayByPlayEven
 
 function transformShotFromAction(action: CdnPbpAction): ShotEvent | null {
   if (!action.isFieldGoal || action.actionType === 'freethrow') return null;
-  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy) && (action.xLegacy !== 0 || action.yLegacy !== 0);
-  const hasNormalizedCoordinates = Number.isFinite(action.x) && Number.isFinite(action.y) && (action.x !== 0 || action.y !== 0);
+  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy);
+  const hasNormalizedCoordinates = Number.isFinite(action.x) && Number.isFinite(action.y);
   if (!hasLegacyCoordinates && !hasNormalizedCoordinates) return null;
   const x = hasLegacyCoordinates ? ((action.xLegacy ?? 0) + 250) / 500 : (action.x ?? 0) / 100;
   const y = hasLegacyCoordinates ? (action.yLegacy ?? 0) / 470 : (action.y ?? 0) / 100;
@@ -579,18 +607,74 @@ function mergeStatsTeamShell(
   });
 }
 
+function findStatsBoxTeam(
+  boxscore: StatsHydratedBoxScore | null | undefined,
+  teamId: unknown,
+  side: 'home' | 'away',
+): StatsHydratedTeamBoxScore | null {
+  const id = toStringValue(teamId);
+  const candidates = [boxscore?.homeTeam, boxscore?.awayTeam, ...(boxscore?.teams ?? [])].filter((team): team is StatsHydratedTeamBoxScore => !!team);
+  return candidates.find(team => id && toStringValue(team.teamId) === id)
+    ?? candidates.find(team => toStringValue(team.homeAway).toLowerCase() === side)
+    ?? null;
+}
+
 function normalizeStatsHydratedGame(response: StatsGameHydrationResponse): Game | null {
-  const hydratedGame = response.game;
-  if (!response.success || !hydratedGame) return null;
-  const boxscore = response.boxscore ?? null;
+  if (!response.success) return null;
+  const summary = response.summary ?? null;
+  const hydratedGame: StatsHydratedGame | null = response.game ?? (summary ? {
+    gameId: summary.gameId,
+    gameCode: summary.gameCode,
+    gameStatus: summary.gameStatus,
+    gameStatusText: summary.gameStatusText,
+    period: summary.period,
+    gameClock: summary.gameClock,
+    gameTimeUTC: summary.gameTimeUTC,
+    gameEt: summary.gameEt,
+    duration: summary.duration,
+    attendance: summary.attendance,
+    sellout: summary.sellout,
+    arena: summary.arena,
+    officials: summary.officials,
+    broadcasters: summary.broadcasters,
+    playoffContext: summary,
+    availability: summary.availability,
+    homeTeam: summary.homeTeam,
+    awayTeam: summary.awayTeam,
+  } : null);
+  if (!hydratedGame) return null;
+
+  const gameId = toStringValue(hydratedGame.gameId ?? response.gameId);
+  if (!gameId || gameId !== toStringValue(response.gameId)) return null;
+  const playoffContext = hydratedGame.playoffContext ?? summary ?? null;
+  const gameTimeUTC = toStringValue(hydratedGame.gameTimeUTC ?? summary?.gameTimeUTC);
+  const homeBoxTeam = findStatsBoxTeam(response.boxscore, hydratedGame.homeTeam?.teamId, 'home');
+  const awayBoxTeam = findStatsBoxTeam(response.boxscore, hydratedGame.awayTeam?.teamId, 'away');
+  const arena = hydratedGame.arena ?? summary?.arena ?? null;
   const proxyGame: ProxyGameShape = {
-    gameId: toStringValue(hydratedGame.gameId ?? response.gameId),
-    gameStatus: hydratedGame.gameStatus,
-    gameStatusText: hydratedGame.gameStatusText,
-    period: hydratedGame.period,
-    gameClock: hydratedGame.gameClock,
-    homeTeam: mergeStatsTeamShell(hydratedGame.homeTeam, boxscore?.homeTeam),
-    awayTeam: mergeStatsTeamShell(hydratedGame.awayTeam, boxscore?.awayTeam),
+    gameId,
+    gameCode: hydratedGame.gameCode ?? summary?.gameCode,
+    primaryDate: gameTimeUTC ? gameTimeUTC.slice(0, 10) : null,
+    gameStatus: hydratedGame.gameStatus ?? summary?.gameStatus,
+    gameStatusText: hydratedGame.gameStatusText ?? summary?.gameStatusText,
+    period: hydratedGame.period ?? summary?.period,
+    gameClock: hydratedGame.gameClock ?? summary?.gameClock,
+    gameTimeUTC: hydratedGame.gameTimeUTC ?? summary?.gameTimeUTC,
+    gameEt: hydratedGame.gameEt ?? summary?.gameEt,
+    duration: hydratedGame.duration ?? summary?.duration,
+    attendance: hydratedGame.attendance ?? summary?.attendance,
+    sellout: hydratedGame.sellout ?? summary?.sellout,
+    arena,
+    officials: hydratedGame.officials ?? summary?.officials,
+    broadcasters: hydratedGame.broadcasters ?? summary?.broadcasters ?? undefined,
+    availability: hydratedGame.availability ?? summary?.availability ?? undefined,
+    seriesGameNumber: playoffContext?.seriesGameNumber,
+    gameLabel: playoffContext?.gameLabel,
+    gameSubLabel: playoffContext?.gameSubLabel,
+    seriesText: playoffContext?.seriesText,
+    ifNecessary: playoffContext?.ifNecessary,
+    homeTeam: mergeStatsTeamShell(hydratedGame.homeTeam ?? summary?.homeTeam, homeBoxTeam),
+    awayTeam: mergeStatsTeamShell(hydratedGame.awayTeam ?? summary?.awayTeam, awayBoxTeam),
   };
   return normalizeProxyGame(proxyGame, formatGameDate(new Date()));
 }
@@ -624,7 +708,15 @@ function statsPlayerToProxyPlayer(player: StatsHydratedPlayerBoxScore): ProxyBox
   };
 }
 
-function statsPlayersForTeam(boxscore: StatsHydratedBoxScore | null | undefined, side: 'home' | 'away', teamId?: string): BoxScorePlayer[] {
+function statsPlayersForTeam(
+  boxscore: StatsHydratedBoxScore | null | undefined,
+  side: 'home' | 'away',
+  teamId?: string,
+  miscPlayers: StatsHydratedMisc | null | undefined = null,
+): BoxScorePlayer[] {
+  const miscByPlayerId = new Map(
+    (miscPlayers?.players ?? []).map(player => [toStringValue(player.playerId ?? player.personId), player] as const),
+  );
   const players = boxscore?.players ?? [];
   return players
     .filter(player => {
@@ -635,11 +727,112 @@ function statsPlayersForTeam(boxscore: StatsHydratedBoxScore | null | undefined,
     .filter(player => isActiveBoxScorePlayer(statsPlayerToProxyPlayer(player)))
     .map(statsPlayerToProxyPlayer)
     .map(transformBoxScorePlayer)
+    .map(player => {
+      const misc = miscByPlayerId.get(player.playerId);
+      return misc?.stats ? { ...player, ...normalizePlayerBoxScoreMiscStats(misc.stats) } : player;
+    })
     .filter(player => player.playerId.length > 0);
 }
 
-function extractStatsTeamStats(team: StatsHydratedTeamBoxScore | null | undefined): Record<string, number> {
-  return extractTeamStats(statsTeamToProxyTeam(team));
+function findTeamStats(
+  source: StatsHydratedTeamPair | null | undefined,
+  teamId: string,
+  side: 'home' | 'away',
+): Record<string, string | number | null | undefined> {
+  const candidates = [source?.homeTeam, source?.awayTeam, ...(source?.teams ?? [])].filter((team): team is StatsHydratedTeamStats => !!team);
+  const team = candidates.find(candidate => toStringValue(candidate.teamId) === teamId)
+    ?? candidates.find(candidate => toStringValue(candidate.homeAway).toLowerCase() === side);
+  return team?.stats ?? {};
+}
+
+function copyGameStoryStats(source: Record<string, string | number | null | undefined>): Record<string, number> {
+  const mappings: Record<string, string[]> = {
+    biggestLead: ['biggestLead'],
+    leadChanges: ['leadChanges'],
+    timesTied: ['timesTied'],
+    biggestScoringRun: ['biggestScoringRun'],
+  };
+  const result: Record<string, number> = {};
+  for (const [target, keys] of Object.entries(mappings)) {
+    for (const key of keys) {
+      const value = toOptionalNumber(source[key]);
+      if (value !== undefined) {
+        result[target] = value;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+function extractStatsTeamStats(
+  response: StatsGameHydrationResponse,
+  team: StatsHydratedTeamBoxScore | null | undefined,
+  teamId: string,
+  side: 'home' | 'away',
+): Record<string, number> {
+  const traditional = extractTeamStats(statsTeamToProxyTeam(team));
+  const postgame = findTeamStats(response.summary?.postgameCharts, teamId, side);
+  const headline = findTeamStats(response.game?.headlineStats, teamId, side);
+  const miscTeam = (response.misc?.teams ?? []).find(candidate => toStringValue(candidate.teamId) === teamId)
+    ?? (response.misc?.teams ?? []).find(candidate => toStringValue(candidate.homeAway).toLowerCase() === side);
+  const misc = miscTeam?.stats ?? {};
+  return {
+    ...traditional,
+    ...normalizeTeamBoxScoreMiscStats(postgame),
+    ...copyGameStoryStats(postgame),
+    ...normalizeTeamBoxScoreMiscStats(headline),
+    ...copyGameStoryStats(headline),
+    ...normalizeTeamBoxScoreMiscStats(misc),
+  };
+}
+
+const CANONICAL_ADVANCED_TEAM_KEYS: Array<Exclude<keyof StatsHydratedAdvancedTeamStats, 'minutes'>> = [
+  'offensiveRating', 'defensiveRating', 'netRating', 'assistPercentage', 'assistToTurnover', 'assistRatio',
+  'offensiveReboundPercentage', 'defensiveReboundPercentage', 'reboundPercentage', 'turnoverRatio',
+  'effectiveFieldGoalPercentage', 'trueShootingPercentage', 'usagePercentage', 'pace', 'pacePer40', 'possessions', 'pie',
+];
+
+function normalizeCanonicalAdvancedTeamStats(source: StatsHydratedAdvancedTeamStats | null | undefined): StatsHydratedAdvancedTeamStats {
+  if (!source) return {};
+  const normalized: Record<string, string | number | null> = {};
+  if (source.minutes != null) normalized.minutes = source.minutes;
+  for (const key of CANONICAL_ADVANCED_TEAM_KEYS) {
+    const value = source[key];
+    if (value === null || (typeof value === 'number' && Number.isFinite(value))) normalized[key] = value;
+  }
+  return normalized as StatsHydratedAdvancedTeamStats;
+}
+
+function normalizeOfficialAdvanced(response: StatsGameHydrationResponse, game: Game): OfficialGameAdvancedStats | undefined {
+  const advanced = response.advanced;
+  if (!advanced) return undefined;
+  const teams = advanced.teams ?? [];
+  const normalizeTeam = (teamId: string, side: 'home' | 'away'): OfficialAdvancedTeam | null => {
+    const team = teams.find(candidate => toStringValue(candidate.teamId) === teamId)
+      ?? teams.find(candidate => toStringValue(candidate.homeAway).toLowerCase() === side);
+    if (!team) return null;
+    return {
+      teamId: toStringValue(team.teamId),
+      teamTricode: toStringValue(team.teamTricode),
+      homeAway: toStringValue(team.homeAway),
+      stats: normalizeCanonicalAdvancedTeamStats(team.stats),
+    };
+  };
+  const players: OfficialAdvancedPlayer[] = (advanced.players ?? []).map(player => ({
+    playerId: toStringValue(player.playerId ?? player.personId),
+    teamId: toStringValue(player.teamId),
+    name: toStringValue(player.name ?? player.displayName),
+    nameI: toStringValue(player.nameI),
+    stats: { ...(player.stats ?? {}) } as StatsHydratedAdvancedPlayerStats,
+  })).filter(player => player.playerId.length > 0);
+  return {
+    source: toStringValue(advanced.source, 'statsBoxScoreAdvancedV3'),
+    gameId: toStringValue(advanced.gameId ?? response.gameId),
+    homeTeam: normalizeTeam(game.homeTeam.id, 'home'),
+    awayTeam: normalizeTeam(game.awayTeam.id, 'away'),
+    players,
+  };
 }
 
 function normalizeStatsActionType(action: StatsHydratedPlayByPlayAction): { actionType: string; subType: string; shotResult: string; isFieldGoal: number; pointsTotal: number } {
@@ -918,14 +1111,38 @@ function normalizeStatsHydratedActions(actions: StatsHydratedPlayByPlayAction[],
 
 export function normalizeStatsHydrationBoxscore(response: StatsGameHydrationResponse): GameDetailData | null {
   const game = normalizeStatsHydratedGame(response);
-  if (!game || !response.boxscore) return null;
-  return {
+  if (!game) return null;
+  const homeTeam = findStatsBoxTeam(response.boxscore, game.homeTeam.id, 'home');
+  const awayTeam = findStatsBoxTeam(response.boxscore, game.awayTeam.id, 'away');
+  const normalized: GameDetailData = {
     game,
-    homeBoxScore: statsPlayersForTeam(response.boxscore, 'home', game.homeTeam.id),
-    awayBoxScore: statsPlayersForTeam(response.boxscore, 'away', game.awayTeam.id),
-    homeTeamStats: extractStatsTeamStats(response.boxscore.homeTeam),
-    awayTeamStats: extractStatsTeamStats(response.boxscore.awayTeam),
+    homeBoxScore: statsPlayersForTeam(response.boxscore, 'home', game.homeTeam.id, response.misc),
+    awayBoxScore: statsPlayersForTeam(response.boxscore, 'away', game.awayTeam.id, response.misc),
+    homeTeamStats: extractStatsTeamStats(response, homeTeam, game.homeTeam.id, 'home'),
+    awayTeamStats: extractStatsTeamStats(response, awayTeam, game.awayTeam.id, 'away'),
+    officialAdvanced: normalizeOfficialAdvanced(response, game),
+    hydration: {
+      schemaVersion: response.schemaVersion ?? null,
+      source: toStringValue(response.source ?? response.game?.source, 'statsGameHydration'),
+      sourceStatus: response.sourceStatus ?? null,
+      coreSources: response.coreSources ?? {},
+      sourceCapabilities: response.sourceCapabilities ?? {},
+    },
   };
+  if (__DEV__) {
+    console.log('[StatsHydrationAdapter][contract]', {
+      gameId: game.id,
+      schemaVersion: normalized.hydration?.schemaVersion,
+      coreSources: normalized.hydration?.coreSources,
+      capabilities: normalized.hydration?.sourceCapabilities,
+      homePaint: normalized.homeTeamStats.pointsInThePaint,
+      awayPaint: normalized.awayTeamStats.pointsInThePaint,
+      homeFastBreak: normalized.homeTeamStats.pointsFastBreak,
+      awayFastBreak: normalized.awayTeamStats.pointsFastBreak,
+      officialAdvancedAvailable: !!normalized.officialAdvanced,
+    });
+  }
+  return normalized;
 }
 
 export function normalizeStatsHydrationPlayByPlay(response: StatsGameHydrationResponse): { events: PlayByPlayEvent[]; shots: ShotEvent[]; rawActions: CdnPbpAction[] } | null {
@@ -968,14 +1185,12 @@ export function getStatsPlayByPlayV3(gameId: string): Promise<StatsPlayByPlayV3R
   return requestProxy<StatsPlayByPlayV3Response>('statsPlayByPlayV3', { gameId });
 }
 
-/** Fetches and memoizes the combined stats hydration fallback route per game. */
+/** Fetches the combined stats hydration fallback route, deduplicating only concurrent requests. */
 export function getStatsGameHydration(gameId: string): Promise<StatsGameHydrationResponse> {
   const cached = statsGameHydrationRequests.get(gameId);
   if (cached) return cached;
   const request = requestProxy<StatsGameHydrationResponse>('statsGameHydration', { gameId }).finally(() => {
-    setTimeout(() => {
-      statsGameHydrationRequests.delete(gameId);
-    }, 1000 * 60 * 5);
+    statsGameHydrationRequests.delete(gameId);
   });
   statsGameHydrationRequests.set(gameId, request);
   return request;

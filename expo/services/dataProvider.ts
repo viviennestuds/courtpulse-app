@@ -168,11 +168,12 @@ export async function getRecentGames(daysBack: number = 3): Promise<DataResult<G
 }
 
 function hasUsefulGameDetailData(data: GameDetailData | null): data is GameDetailData {
-  if (!data?.game) return false;
+  if (!data?.game?.id) return false;
   const playerCount = data.homeBoxScore.length + data.awayBoxScore.length;
-  const homeStatCount = Object.keys(data.homeTeamStats).length;
-  const awayStatCount = Object.keys(data.awayTeamStats).length;
-  return playerCount > 0 || homeStatCount > 1 || awayStatCount > 1;
+  const hasStatSignal = [...Object.values(data.homeTeamStats), ...Object.values(data.awayTeamStats)]
+    .some(value => Number.isFinite(value) && value !== 0);
+  const hasScoreSignal = data.game.homeTeam.score !== 0 || data.game.awayTeam.score !== 0;
+  return playerCount > 0 || hasStatSignal || hasScoreSignal;
 }
 
 export async function getGameDetail(gameId: string, enableStatsHydrationFallback: boolean = false): Promise<DataResult<GameDetailData | null>> {
@@ -203,8 +204,11 @@ export async function getGameDetail(gameId: string, enableStatsHydrationFallback
     console.warn(`[DataProvider] Proxy boxscore unavailable for ${gameId}: ${reason}; trying statsGameHydration fallback`);
     const hydrated = await getStatsGameHydration(gameId);
     const hydratedData = normalizeStatsHydrationBoxscore(hydrated);
-    if (hasUsefulGameDetailData(hydratedData)) {
-      return { data: hydratedData, source: 'live', state: hydrated.sourceStatus === 'ok' ? 'success' : 'partial' };
+    const hasAuthoritativeHydratedShell = hydrated.success && hydratedData?.game.id === gameId;
+    if (hasAuthoritativeHydratedShell && hydratedData) {
+      const hasCompleteCore = hydrated.sourceStatus === 'ok'
+        && Object.values(hydrated.coreSources ?? {}).every(status => status === 'ok');
+      return { data: hydratedData, source: 'live', state: hasCompleteCore ? 'success' : 'partial' };
     }
     const hydratedReason = hydrated.error ?? hydrated.message ?? hydrated.errorCategory ?? 'statsGameHydration did not include usable boxscore data';
     throw new Error(hydratedReason);

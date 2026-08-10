@@ -49,7 +49,7 @@ function gameTimeElapsed(period: number, clockSeconds: number): number {
 }
 
 function normalizeCoordinates(action: CdnPbpAction): { x: number | null; y: number | null } {
-  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy) && (action.xLegacy !== 0 || action.yLegacy !== 0);
+  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy);
   if (hasLegacyCoordinates) {
     const x = ((action.xLegacy ?? 0) + 250) / 500;
     const y = (action.yLegacy ?? 0) / 470;
@@ -58,10 +58,10 @@ function normalizeCoordinates(action: CdnPbpAction): { x: number | null; y: numb
       y: Math.max(0, Math.min(1, y)),
     };
   }
-  if (action.x != null && action.y != null && (action.x !== 0 || action.y !== 0)) {
+  if (Number.isFinite(action.x) && Number.isFinite(action.y)) {
     return {
-      x: Math.max(0, Math.min(1, action.x / 100)),
-      y: Math.max(0, Math.min(1, action.y / 100)),
+      x: Math.max(0, Math.min(1, (action.x ?? 0) / 100)),
+      y: Math.max(0, Math.min(1, (action.y ?? 0) / 100)),
     };
   }
   return { x: null, y: null };

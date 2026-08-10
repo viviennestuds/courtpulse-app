@@ -263,8 +263,19 @@ export interface Game {
   arena: string;
   attendance?: number;
   isPlayoff: boolean;
+  gameCode?: string;
+  gameTimeUTC?: string;
+  gameEt?: string;
+  duration?: string;
+  sellout?: boolean;
   seriesGameNumber?: string;
+  gameLabel?: string;
+  gameSubLabel?: string;
   seriesText?: string;
+  ifNecessary?: boolean;
+  officials?: StatsHydratedOfficial[];
+  broadcasters?: StatsHydratedBroadcasters;
+  availability?: StatsHydratedAvailability;
   featuredRun?: ScoringRun;
 }
 
@@ -345,28 +356,52 @@ export interface ShotEvent {
 
 export interface NbaProxySourceCapabilities {
   source?: string | null;
+  schemaVersion?: string | null;
   hasGameShell?: boolean;
+  hasSummary?: boolean;
   hasScores?: boolean;
   hasTeamBoxScore?: boolean;
   hasPlayerBoxScore?: boolean;
+  hasMisc?: boolean;
+  hasAdvanced?: boolean;
+  advancedTeamEstimatedFieldsQuarantined?: boolean;
   hasPlayByPlay?: boolean;
+  hasShotFields?: boolean;
+  hasShotCoordinates?: boolean;
   hasShotChart?: boolean;
+  shotTelemetryVersion?: string | null;
+  shotFieldCoverage?: unknown;
+  optionalEnrichments?: Record<string, string | null | undefined> | null;
   usesStatsFallback?: boolean;
   usesCdn?: boolean;
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: unknown;
+}
+
+export interface StatsHydrationCoreSources {
+  summary?: string | null;
+  traditional?: string | null;
+  misc?: string | null;
+  advanced?: string | null;
+  playbyplay?: string | null;
+  [key: string]: string | null | undefined;
 }
 
 export interface StatsGameHydrationResponse {
   success: boolean;
   type: 'statsGameHydration';
   gameId: string;
+  schemaVersion?: string | null;
   source?: string | null;
   sourceStatus?: string | null;
   errorCategory?: string | null;
   noGamesConfirmed?: boolean;
+  coreSources?: StatsHydrationCoreSources | null;
   sourceCapabilities?: NbaProxySourceCapabilities | null;
   game?: StatsHydratedGame | null;
+  summary?: StatsHydratedSummary | null;
   boxscore?: StatsHydratedBoxScore | null;
+  misc?: StatsHydratedMisc | null;
+  advanced?: StatsHydratedAdvanced | null;
   playbyplay?: StatsHydratedPlayByPlay | null;
   attempts?: unknown;
   fetchedAt?: string;
@@ -402,13 +437,82 @@ export interface StatsPlayByPlayV3Response extends StatsRouteResponseBase {
 export interface StatsHydratedGame {
   source?: string | null;
   gameId?: string | number | null;
+  gameCode?: string | null;
   gameStatus?: string | number | null;
   gameStatusText?: string | null;
   period?: string | number | null;
   gameClock?: string | null;
+  gameTimeUTC?: string | null;
+  gameEt?: string | null;
+  duration?: string | null;
+  attendance?: string | number | null;
+  sellout?: string | number | boolean | null;
+  arena?: StatsHydratedArena | null;
+  officials?: StatsHydratedOfficial[];
+  broadcasters?: StatsHydratedBroadcasters | null;
+  playoffContext?: StatsHydratedPlayoffContext | null;
+  availability?: StatsHydratedAvailability | null;
+  headlineStats?: StatsHydratedTeamPair | null;
   inferredFrom?: string | null;
   homeTeam?: StatsHydratedTeam | null;
   awayTeam?: StatsHydratedTeam | null;
+}
+
+export interface StatsHydratedArena {
+  arenaId?: string | number | null;
+  arenaName?: string | null;
+  arenaCity?: string | null;
+  arenaState?: string | null;
+  arenaCountry?: string | null;
+  arenaTimezone?: string | null;
+}
+
+export interface StatsHydratedOfficial {
+  personId?: string | number | null;
+  name?: string | null;
+  nameI?: string | null;
+  firstName?: string | null;
+  familyName?: string | null;
+  jerseyNum?: string | null;
+  assignment?: string | null;
+}
+
+export interface StatsHydratedBroadcaster {
+  broadcasterId?: string | number | null;
+  broadcasterTeamId?: string | number | null;
+  broadcasterDisplay?: string | null;
+  broadcasterDescription?: string | null;
+  broadcasterVideoLink?: string | null;
+  regionId?: string | number | null;
+}
+
+export interface StatsHydratedBroadcasters {
+  national?: StatsHydratedBroadcaster[];
+  homeTv?: StatsHydratedBroadcaster[];
+  awayTv?: StatsHydratedBroadcaster[];
+  homeRadio?: StatsHydratedBroadcaster[];
+  awayRadio?: StatsHydratedBroadcaster[];
+  homeOtt?: StatsHydratedBroadcaster[];
+  awayOtt?: StatsHydratedBroadcaster[];
+  international?: StatsHydratedBroadcaster[];
+  internationalOtt?: StatsHydratedBroadcaster[];
+  internationalRadio?: StatsHydratedBroadcaster[];
+}
+
+export interface StatsHydratedPlayoffContext {
+  seriesGameNumber?: string | null;
+  gameLabel?: string | null;
+  gameSubLabel?: string | null;
+  seriesText?: string | null;
+  ifNecessary?: boolean | null;
+}
+
+export interface StatsHydratedAvailability {
+  videoAvailable?: boolean | null;
+  playerTrackingAvailable?: boolean | null;
+  playerTrackingXyzAvailable?: boolean | null;
+  hustleAvailable?: boolean | null;
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 export interface StatsHydratedTeam {
@@ -417,7 +521,45 @@ export interface StatsHydratedTeam {
   teamName?: string | null;
   teamTricode?: string | null;
   teamSlug?: string | null;
+  homeAway?: 'home' | 'away' | string | null;
   score?: string | number | null;
+  teamWins?: string | number | null;
+  teamLosses?: string | number | null;
+  seed?: string | number | null;
+  periods?: Array<{ period?: string | number | null; periodType?: string | null; score?: string | number | null }>;
+}
+
+export interface StatsHydratedTeamStats extends StatsHydratedTeam {
+  stats?: Record<string, string | number | null | undefined>;
+}
+
+export interface StatsHydratedTeamPair {
+  homeTeam?: StatsHydratedTeamStats | null;
+  awayTeam?: StatsHydratedTeamStats | null;
+  teams?: StatsHydratedTeamStats[];
+}
+
+export interface StatsHydratedSummary extends StatsHydratedPlayoffContext {
+  source?: string | null;
+  gameId?: string | number | null;
+  gameCode?: string | null;
+  gameStatus?: string | number | null;
+  gameStatusText?: string | null;
+  period?: string | number | null;
+  gameClock?: string | null;
+  gameTimeUTC?: string | null;
+  gameEt?: string | null;
+  duration?: string | null;
+  attendance?: string | number | null;
+  sellout?: string | number | boolean | null;
+  arena?: StatsHydratedArena | null;
+  officials?: StatsHydratedOfficial[];
+  broadcasters?: StatsHydratedBroadcasters | null;
+  availability?: StatsHydratedAvailability | null;
+  homeTeam?: StatsHydratedTeam | null;
+  awayTeam?: StatsHydratedTeam | null;
+  postgameCharts?: StatsHydratedTeamPair | null;
+  pregameCharts?: StatsHydratedTeamPair | null;
 }
 
 export interface StatsHydratedBoxScore {
@@ -469,6 +611,99 @@ export interface StatsHydratedPlayerBoxScore {
   stats?: Record<string, string | number | null | undefined>;
 }
 
+export interface StatsHydratedMisc {
+  source?: string | null;
+  gameId?: string | number | null;
+  teamCount?: number | null;
+  playerCount?: number | null;
+  teams?: StatsHydratedTeamStats[];
+  players?: StatsHydratedPlayerContextStats[];
+}
+
+export interface StatsHydratedPlayerContextStats extends StatsHydratedPlayerBoxScore {
+  stats?: Record<string, string | number | null | undefined>;
+}
+
+export interface StatsHydratedAdvancedTeamStats {
+  minutes?: string | number | null;
+  offensiveRating?: number | null;
+  defensiveRating?: number | null;
+  netRating?: number | null;
+  assistPercentage?: number | null;
+  assistToTurnover?: number | null;
+  assistRatio?: number | null;
+  offensiveReboundPercentage?: number | null;
+  defensiveReboundPercentage?: number | null;
+  reboundPercentage?: number | null;
+  turnoverRatio?: number | null;
+  effectiveFieldGoalPercentage?: number | null;
+  trueShootingPercentage?: number | null;
+  usagePercentage?: number | null;
+  pace?: number | null;
+  pacePer40?: number | null;
+  possessions?: number | null;
+  pie?: number | null;
+}
+
+export interface StatsHydratedAdvancedPlayerStats extends StatsHydratedAdvancedTeamStats {
+  estimatedOffensiveRating?: number | null;
+  estimatedDefensiveRating?: number | null;
+  estimatedNetRating?: number | null;
+  estimatedTeamTurnoverPercentage?: number | null;
+  estimatedUsagePercentage?: number | null;
+  estimatedPace?: number | null;
+  [key: string]: string | number | null | undefined;
+}
+
+export interface StatsHydratedAdvancedTeam extends StatsHydratedTeam {
+  stats?: StatsHydratedAdvancedTeamStats;
+  sourceRawEstimatedFields?: Record<string, number | null | undefined>;
+}
+
+export interface StatsHydratedAdvancedPlayer extends StatsHydratedPlayerBoxScore {
+  stats?: StatsHydratedAdvancedPlayerStats;
+}
+
+export interface StatsHydratedAdvanced {
+  source?: string | null;
+  gameId?: string | number | null;
+  teamCount?: number | null;
+  playerCount?: number | null;
+  teams?: StatsHydratedAdvancedTeam[];
+  players?: StatsHydratedAdvancedPlayer[];
+}
+
+export interface OfficialAdvancedTeam {
+  teamId: string;
+  teamTricode: string;
+  homeAway: string;
+  stats: StatsHydratedAdvancedTeamStats;
+}
+
+export interface OfficialAdvancedPlayer {
+  playerId: string;
+  teamId: string;
+  name: string;
+  nameI: string;
+  stats: StatsHydratedAdvancedPlayerStats;
+}
+
+export interface OfficialGameAdvancedStats {
+  source: string;
+  gameId: string;
+  homeTeam: OfficialAdvancedTeam | null;
+  awayTeam: OfficialAdvancedTeam | null;
+  players: OfficialAdvancedPlayer[];
+}
+
+export interface GameDetailHydrationMetadata {
+  schemaVersion: string | null;
+  source: string;
+  sourceStatus: string | null;
+  coreSources: StatsHydrationCoreSources;
+  sourceCapabilities: NbaProxySourceCapabilities;
+}
+
 export interface StatsHydratedPlayByPlay {
   source?: string | null;
   actionCount?: number | null;
@@ -506,8 +741,11 @@ export interface StatsHydratedPlayByPlayAction {
   isFieldGoal?: string | number | boolean | null;
   shotValue?: string | number | null;
   location?: string | null;
-  videoAvailable?: boolean | null;
+  videoAvailable?: string | number | boolean | null;
   actionId?: string | number | null;
+  pointsTotal?: string | number | null;
+  isShotEvent?: boolean | null;
+  shotCoordinatesAvailable?: boolean | null;
 }
 
 export interface ScoringRun {

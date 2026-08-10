@@ -21,19 +21,19 @@ const TEAM_MISC_FIELD_KEYS: Record<string, string[]> = {
   pointsOffTurnovers: POINTS_OFF_TURNOVERS_KEYS,
   pointsSecondChance: ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance'],
   pointsFastBreak: ['pointsFastBreak', 'fastBreakPoints', 'FBPS', 'fbps'],
-  pointsInThePaint: ['pointsInThePaint', 'PITP', 'pitp'],
+  pointsInThePaint: ['pointsPaint', 'pointsInThePaint', 'PITP', 'pitp'],
   benchPoints: ['benchPoints', 'ptsBench', 'pointsBench'],
   personalFoulsDrawn: ['foulsDrawn', 'personalFoulsDrawn', 'PFD', 'pfd'],
-  blockedAttempts: ['blocksReceived', 'blockedAttempts', 'BLKA', 'blka'],
+  blockedAttempts: ['blocksAgainst', 'blocksReceived', 'blockedAttempts', 'BLKA', 'blka'],
   pointsAgainst: ['pointsAgainst'],
 };
 
 const PLAYER_MISC_FIELD_KEYS: Record<string, string[]> = {
   pointsSecondChance: ['pointsSecondChance', 'secondChancePoints', 'ptsSecondChance'],
   pointsFastBreak: ['pointsFastBreak', 'fastBreakPoints', 'FBPS', 'fbps'],
-  pointsInThePaint: ['pointsInThePaint', 'PITP', 'pitp'],
+  pointsInThePaint: ['pointsPaint', 'pointsInThePaint', 'PITP', 'pitp'],
   personalFoulsDrawn: ['foulsDrawn', 'personalFoulsDrawn', 'PFD', 'pfd'],
-  blockedAttempts: ['blocksReceived', 'blockedAttempts', 'BLKA', 'blka'],
+  blockedAttempts: ['blocksAgainst', 'blocksReceived', 'blockedAttempts', 'BLKA', 'blka'],
 };
 
 function pickSourceBackedNumber(source: StatSource, keys: string[]): number | undefined {

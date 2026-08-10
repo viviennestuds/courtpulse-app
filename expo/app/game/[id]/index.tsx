@@ -67,9 +67,10 @@ const PBP_FILTERS = ['All', 'Scores', 'Turnovers', 'Fouls', 'Steals', 'Blocks'];
 const ANALYTICS_SUBS = ['Runs', 'Droughts', 'Lineups', 'Impact'];
 
 function formatPlayoffMeta(game: Game): string {
-  const gameNumber = game.seriesGameNumber?.trim();
-  const seriesText = game.seriesText?.trim();
-  return [gameNumber, seriesText].filter(Boolean).join(' · ');
+  const parts = [game.seriesGameNumber, game.gameLabel ?? game.gameSubLabel, game.seriesText]
+    .map(value => value?.trim())
+    .filter((value): value is string => !!value);
+  return Array.from(new Set(parts)).join(' · ');
 }
 
 function displayTeamAbbr(abbreviation: string | undefined): string {

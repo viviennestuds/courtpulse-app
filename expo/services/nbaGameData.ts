@@ -1,4 +1,4 @@
-import { BoxScorePlayer, PlayByPlayEvent, ShotEvent, Game } from '@/types';
+import { BoxScorePlayer, GameDetailHydrationMetadata, OfficialGameAdvancedStats, PlayByPlayEvent, ShotEvent, Game } from '@/types';
 import { fetchNbaCdn, fetchNbaStats, parsePTClock, parsePTMinutes, parsePTToSeconds, getGameStatus, getPeriodText, getStatusClockText } from './nbaApi';
 import { getTeamInfoById } from '@/constants/nbaTeams';
 import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
@@ -100,7 +100,7 @@ export interface CdnPbpAction {
   xLegacy?: number;
   yLegacy?: number;
   location?: string;
-  videoAvailable?: boolean;
+  videoAvailable?: string | number | boolean;
   actionId?: string | number;
   eventNum?: number;
   isFieldGoal: number;
@@ -120,6 +120,8 @@ export interface GameDetailData {
   awayBoxScore: BoxScorePlayer[];
   homeTeamStats: Record<string, number>;
   awayTeamStats: Record<string, number>;
+  officialAdvanced?: OfficialGameAdvancedStats;
+  hydration?: GameDetailHydrationMetadata;
 }
 
 function transformBoxScorePlayer(p: CdnBoxScorePlayer): BoxScorePlayer {
@@ -218,8 +220,8 @@ function transformShotFromAction(action: CdnPbpAction): ShotEvent | null {
   if (!action.isFieldGoal) return null;
   if (action.actionType === 'freethrow') return null;
 
-  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy) && (action.xLegacy !== 0 || action.yLegacy !== 0);
-  const hasNormalizedCoordinates = Number.isFinite(action.x) && Number.isFinite(action.y) && (action.x !== 0 || action.y !== 0);
+  const hasLegacyCoordinates = Number.isFinite(action.xLegacy) && Number.isFinite(action.yLegacy);
+  const hasNormalizedCoordinates = Number.isFinite(action.x) && Number.isFinite(action.y);
   if (!hasLegacyCoordinates && !hasNormalizedCoordinates) return null;
 
   const x = hasLegacyCoordinates ? ((action.xLegacy ?? 0) + 250) / 500 : (action.x ?? 0) / 100;
