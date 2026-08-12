@@ -1,3 +1,5 @@
+export * from './playersDirectory';
+
 export interface Team {
   id: string;
   name: string;

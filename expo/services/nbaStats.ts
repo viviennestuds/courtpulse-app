@@ -1,6 +1,8 @@
 import { Team, Player, PlayerOverview, PlayersOverviewResponse, TeamOverview, TeamOverviewResponse, TeamRosterPlayer, TeamRosterResponse } from '@/types';
 import { fetchNbaCdnStatic, fetchNbaStats, NBA_SEASON_TYPE } from './nbaApi';
 import { getPlayerHeadshotUrl, getTeamInfoById, NBA_TEAMS } from '@/constants/nbaTeams';
+import type { PlayerDirectorySnapshot, PlayersPhaseAvailabilityResponse, PlayersSeasonPhase } from '@/types/playersDirectory';
+import { isValidPlayerDirectorySnapshot, isValidPlayersPhaseAvailabilityResponse } from './playersDirectoryValidation';
 
 export const TEAM_STANDINGS_SEASON = '2025-26';
 const NBA_STATS_PROXY_BASE_URL = 'https://gikxqfkzmwcujkndoizr.supabase.co/functions/v1/nba-stats-proxy';
@@ -297,10 +299,20 @@ function validateStatsProxyPayload(parsed: unknown, expectedType: string, expect
   return payload;
 }
 
-async function fetchNbaStatsProxyPayload(params: Record<string, string>): Promise<Record<string, unknown>> {
+export interface NbaStatsProxyFetchOptions {
+  signal?: AbortSignal;
+}
+
+async function fetchNbaStatsProxyPayload(
+  params: Record<string, string>,
+  options: NbaStatsProxyFetchOptions = {},
+): Promise<Record<string, unknown>> {
   const url = new URL(NBA_STATS_PROXY_BASE_URL);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
-  const response = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+  const response = await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+    signal: options.signal,
+  });
   const text = await response.text();
 
   if (!response.ok) {
@@ -473,6 +485,31 @@ export async function fetchPlayersOverview({
     warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === 'string') : undefined,
     cache: payload.cache,
   };
+}
+
+/** Fetches and defensively validates one canonical league-wide Players directory snapshot. */
+export async function fetchPlayersDirectory(
+  season: string,
+  phase: PlayersSeasonPhase,
+  options: NbaStatsProxyFetchOptions = {},
+): Promise<PlayerDirectorySnapshot> {
+  const payload = await fetchNbaStatsProxyPayload({ type: 'playersDirectory', season, phase }, options);
+  if (!isValidPlayerDirectorySnapshot(payload, season, phase)) {
+    throw new Error(`Invalid playersDirectory.v1 payload for ${season} ${phase}`);
+  }
+  return payload;
+}
+
+/** Fetches phase availability without loading or persisting another full directory snapshot. */
+export async function fetchPlayersPhaseAvailability(
+  season: string,
+  options: NbaStatsProxyFetchOptions = {},
+): Promise<PlayersPhaseAvailabilityResponse> {
+  const payload = await fetchNbaStatsProxyPayload({ type: 'playersPhaseAvailability', season }, options);
+  if (!isValidPlayersPhaseAvailabilityResponse(payload, season)) {
+    throw new Error(`Invalid playersPhaseAvailability.v1 payload for ${season}`);
+  }
+  return payload;
 }
 
 export async function fetchTeamStats(): Promise<Team[]> {

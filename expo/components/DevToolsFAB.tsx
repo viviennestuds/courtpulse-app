@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { TouchableOpacity, StyleSheet, Animated, PanResponder, Dimensions, View } from 'react-native';
+import { StyleSheet, Animated, PanResponder, Dimensions, View } from 'react-native';
 import { Bug } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import DevToolsPanel from './DevToolsPanel';
@@ -8,8 +8,6 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const FAB_SIZE = 44;
 
 export default function DevToolsFAB() {
-  if (!__DEV__) return null;
-
   const [showPanel, setShowPanel] = useState<boolean>(false);
   const pan = useRef(new Animated.ValueXY({ x: SCREEN_W - FAB_SIZE - 16, y: SCREEN_H - 160 })).current;
 
@@ -32,6 +30,8 @@ export default function DevToolsFAB() {
       },
     })
   ).current;
+
+  if (!__DEV__) return null;
 
   return (
     <>
