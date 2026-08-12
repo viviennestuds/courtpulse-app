@@ -1,0 +1,47 @@
+{
+  "theme": {
+    "style": "A dark, technical control-room aesthetic built for basketball data: deep charcoal and near-black courts of color punctuated by electric orange and cool steel-blue highlights, evoking scoreboard glow and hardwood under stadium lights. Surfaces feel like brushed carbon fiber and frosted glass, with crisp analytical lighting and subtle grid textures suggesting precision and live stats. Bold but controlled, engineered for legibility and speed rather than decoration.",
+    "headlineFont": "'Inter', sans-serif",
+    "headlineFontSize": 112,
+    "mockupIds": {
+      "iphone": "deep-blue",
+      "ipad": "space-gray"
+    },
+    "palette": {
+      "primary": "#0B0E14",
+      "secondary": "#1C2733",
+      "accent": "#FF7A1A"
+    },
+    "layoutId": "hero-clipped"
+  },
+  "slides": [
+    {
+      "label": "Default Players Directory",
+      "backgroundPrompt": "Abstract digital art of a vast dark charcoal expanse with thin glowing steel-blue grid lines converging toward a soft vanishing point, scattered faint orange sparks drifting like distant scoreboard lights, deep obsidian black and cool blue tones dominating the frame, dramatic side lighting casting long soft gradients across the lower half, fine grain texture and subtle glass reflections layered throughout, the upper 30% calm and near-black for text clarity, 8K quality, ultra smooth gradients, premium feel, no text, no letters, no UI elements, no device mockups",
+      "backgroundUrl": "https://r2-pub.rork.com/app-store-screenshots/3e4a6a44-bae3-48ef-b797-c6f3a960e07a.png"
+    },
+    {
+      "label": "Simons Search",
+      "backgroundPrompt": "Abstract 3D rendered scene of a single sharp beam of electric orange light slicing diagonally through a dark near-black void, surrounded by faint translucent steel-blue geometric shards catching the light at their edges, deep charcoal background with subtle smoke wisps drifting near the bottom, dramatic rim lighting creating a sense of focused precision, fine dust particles glinting in the beam, the upper section dark and uncluttered, 8K quality, ultra smooth gradients, premium feel, no text, no letters, no UI elements, no device mockups",
+      "backgroundUrl": "https://r2-pub.rork.com/app-store-screenshots/7edfb905-f8a4-4d3c-af99-46b7f2c2e732.png"
+    },
+    {
+      "label": "Postseason Directory",
+      "backgroundPrompt": "Cinematic dark environment with sweeping arcs of molten orange light cutting across a deep charcoal black backdrop, intense dramatic rim lighting from below evoking stadium intensity, floating translucent steel-blue glass shards scattered mid-frame, fine particles catching warm light like confetti under arena lights, upper portion fading into calm near-black darkness, 8K quality, ultra smooth gradients, premium feel, no text, no letters, no UI elements, no device mockups",
+      "backgroundUrl": "https://r2-pub.rork.com/app-store-screenshots/9ee1341e-5c94-4352-9589-9239245a6c06.png"
+    },
+    {
+      "label": "Season Selector",
+      "backgroundPrompt": "Abstract digital art of layered translucent frosted dark glass panels stacked at steep angles against a deep charcoal void, each edge glowing with thin lines of cool steel-blue and warm orange light, deep shadows pooling between layers to create dramatic depth, soft diffused glow pooling at the base of the frame, upper region dark and calm for overlay text, 8K quality, ultra smooth gradients, premium feel, no text, no letters, no UI elements, no device mockups",
+      "backgroundUrl": "https://r2-pub.rork.com/app-store-screenshots/718abd76-3c45-46ee-a543-cd206491e7d5.png"
+    }
+  ],
+  "headlines": {
+    "en": {
+      "Default Players Directory": "Every Player<br>One Tap Away",
+      "Simons Search": "Find Any Star<br>Instantly",
+      "Postseason Directory": "Playoff Mode<br>Activated",
+      "Season Selector": "Switch Seasons<br>In Seconds"
+    }
+  }
+}

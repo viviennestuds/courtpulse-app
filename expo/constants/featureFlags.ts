@@ -349,6 +349,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     channel: 'stable',
     defaultEnabled: true,
   },
+  {
+    key: 'players_directory_v1_enabled',
+    label: 'Players Directory V1',
+    description: 'Use the production season-aware Players directory while retaining the legacy leaderboard as a rollback path.',
+    channel: 'stable',
+    defaultEnabled: true,
+  },
 ] as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[number]['key'];
