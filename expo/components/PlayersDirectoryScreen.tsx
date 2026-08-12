@@ -13,6 +13,12 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, Check, ChevronDown, RotateCcw, Search, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
+import {
+  NBA_LATEST_SUPPORTED_DATA_SEASON,
+  NBA_SUPPORTED_DATA_SEASONS,
+  isSupportedNbaDataSeasonId,
+  type NbaSeasonId,
+} from '@/constants/nbaSeasons';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { usePlayersDirectory } from '@/hooks/usePlayersDirectory';
 import PlayerDirectoryRow from '@/components/PlayerDirectoryRow';
@@ -21,8 +27,6 @@ import type { PlayerDirectoryEntry, PlayersSeasonPhase } from '@/types/playersDi
 import {
   derivePlayersTeamOptions,
   getPostseasonControlState,
-  PLAYERS_DEFAULT_SEASON,
-  PLAYERS_DIRECTORY_SEASONS,
   PLAYERS_SORT_OPTIONS,
   PlayersDirectorySortMetric,
   transformPlayersDirectory,
@@ -69,7 +73,7 @@ const FilterButton = React.memo(function FilterButton({
 export default function PlayersDirectoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [season, setSeason] = useState<string>(PLAYERS_DEFAULT_SEASON);
+  const [season, setSeason] = useState<NbaSeasonId>(NBA_LATEST_SUPPORTED_DATA_SEASON);
   const [phase, setPhase] = useState<PlayersSeasonPhase>('regular');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [teamKey, setTeamKey] = useState<string | null>(null);
@@ -120,7 +124,7 @@ export default function PlayersDirectoryScreen() {
   const hasValidEmptyPhase = snapshot?.dataAvailable === false && snapshot.noDataConfirmed === true;
 
   const handleSeasonSelect = useCallback((nextSeason: string) => {
-    if (!PLAYERS_DIRECTORY_SEASONS.some((option) => option === nextSeason)) return;
+    if (!isSupportedNbaDataSeasonId(nextSeason)) return;
     setSeason(nextSeason);
     setPhase('regular');
     setTeamKey(null);
@@ -165,7 +169,7 @@ export default function PlayersDirectoryScreen() {
     if (selector === 'season') {
       return {
         title: 'Season',
-        options: PLAYERS_DIRECTORY_SEASONS.map((option) => ({ value: option, label: option })),
+        options: NBA_SUPPORTED_DATA_SEASONS.map((option) => ({ value: option.id, label: option.label })),
         selectedValue: season,
       };
     }

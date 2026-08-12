@@ -1,8 +1,5 @@
 import type { PlayerDirectoryEntry, PlayersPhaseAvailability } from '@/types/playersDirectory';
 
-export const PLAYERS_DEFAULT_SEASON = '2025-26';
-export const PLAYERS_DIRECTORY_SEASONS = ['2025-26', '2024-25'] as const;
-
 export type PlayersDirectorySortMetric = 'PTS' | 'REB' | 'AST' | 'TS%' | 'MIN' | 'NET';
 
 export interface PlayersTeamFilterOption {
