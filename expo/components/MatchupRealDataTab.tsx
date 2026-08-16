@@ -6,6 +6,13 @@ import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import { BoxScorePlayer, Team, Player, ScoringRun } from '@/types';
 import { useTeams, usePlayers, useGameMatchups } from '@/hooks/useNbaData';
+import { useGameMatchupSummaryV2 } from '@/hooks/useGameMatchupSummaryV2';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import {
+  MatchupV2KeyMatchups,
+  MatchupV2PairSelection,
+  MatchupV2WhoGuarded,
+} from '@/components/MatchupV2Summary';
 import type { CdnPbpAction, GameMatchupRow } from '@/services/nbaGameData';
 import {
   buildNbaMatchupFilmUrl,
@@ -23,6 +30,11 @@ interface TeamSide {
 }
 
 type GameStatus = 'live' | 'final' | 'scheduled';
+type FilmRoomSelectionSource = 'default' | 'keyMatchup' | 'custom';
+
+interface FilmRoomPairSelectionRequest extends MatchupV2PairSelection {
+  requestId: number;
+}
 
 interface MatchupRealDataTabProps {
   homeTeam: TeamSide;
@@ -134,6 +146,7 @@ export default React.memo(function MatchupRealDataTab({
 }: MatchupRealDataTabProps) {
   const isPreGame = status === 'scheduled';
   const isLiveOrFinal = status === 'live' || status === 'final';
+  const matchupV2SummaryEnabled = useFeatureFlag('matchup_v2_summary_enabled');
 
   const { teams } = useTeams();
   const { players } = usePlayers();
@@ -172,6 +185,7 @@ export default React.memo(function MatchupRealDataTab({
         rawActions={rawActions}
         gameId={gameId}
         runs={runs}
+        matchupV2SummaryEnabled={matchupV2SummaryEnabled}
       />
     );
   }
@@ -422,6 +436,7 @@ function GameStoryView({
   rawActions,
   gameId,
   runs,
+  matchupV2SummaryEnabled,
 }: {
   status: GameStatus;
   homeTeam: TeamSide;
@@ -433,7 +448,61 @@ function GameStoryView({
   rawActions?: CdnPbpAction[];
   gameId?: string;
   runs?: ScoringRun[];
+  matchupV2SummaryEnabled: boolean;
 }) {
+  const summaryQuery = useGameMatchupSummaryV2({
+    gameId: gameId ?? '',
+    enabled: matchupV2SummaryEnabled && !!gameId,
+    status,
+  });
+  const summary = summaryQuery.data;
+  const isV2InitialLoading = matchupV2SummaryEnabled && !!gameId && summaryQuery.isPending;
+  const isV2LayoutActive = isV2InitialLoading || summary !== undefined;
+  const [filmRoomSource, setFilmRoomSource] = useState<FilmRoomSelectionSource>('default');
+  const [activeKeyMatchupPair, setActiveKeyMatchupPair] = useState<{
+    offensePlayerId: string;
+    defensePlayerId: string;
+  } | null>(null);
+  const [filmRoomSelectionRequest, setFilmRoomSelectionRequest] = useState<FilmRoomPairSelectionRequest | undefined>(undefined);
+  const selectionRequestIdRef = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    setFilmRoomSource('default');
+    setActiveKeyMatchupPair(null);
+    setFilmRoomSelectionRequest(undefined);
+  }, [gameId, matchupV2SummaryEnabled]);
+
+  const handleLoadKeyMatchup = useCallback((selection: MatchupV2PairSelection) => {
+    selectionRequestIdRef.current += 1;
+    setFilmRoomSource('keyMatchup');
+    setActiveKeyMatchupPair({
+      offensePlayerId: selection.offensePlayerId,
+      defensePlayerId: selection.defensePlayerId,
+    });
+    setFilmRoomSelectionRequest({ ...selection, requestId: selectionRequestIdRef.current });
+    if (__DEV__) {
+      console.log('[MatchupSummaryV2] pair loaded into Film Room', {
+        gameId: gameId ?? null,
+        offensePlayerId: selection.offensePlayerId,
+        defensePlayerId: selection.defensePlayerId,
+      });
+    }
+  }, [gameId]);
+
+  const handleFilmRoomSourceChange = useCallback((source: FilmRoomSelectionSource) => {
+    setFilmRoomSource(source);
+    if (source !== 'keyMatchup') setActiveKeyMatchupPair(null);
+    if (__DEV__) {
+      console.log('[MatchupFilmRoom] source transition', { gameId: gameId ?? null, source });
+    }
+  }, [gameId]);
+
+  const handleExternalSelectionResolved = useCallback((wasRepresented: boolean) => {
+    if (wasRepresented) return;
+    setFilmRoomSource('default');
+    setActiveKeyMatchupPair(null);
+  }, []);
+
   const hasTeamStats = Object.keys(homeTeamStats).length > 1 && Object.keys(awayTeamStats).length > 1;
   const hasBoxScores = homeBoxScore.length > 0 && awayBoxScore.length > 0;
 
@@ -503,7 +572,7 @@ function GameStoryView({
       .slice(0, 2);
   }, [awayBoxScore]);
 
-  if (!hasTeamStats && !hasBoxScores) {
+  if (!hasTeamStats && !hasBoxScores && !isV2LayoutActive) {
     return (
       <View>
         <View style={styles.emptyCard}>
@@ -527,33 +596,55 @@ function GameStoryView({
         </>
       )}
 
-      {drivers.length > 0 && (
+      {isV2LayoutActive ? (
         <>
-          <SectionHeader icon={<Activity size={12} color={Colors.warning} />} label="GAME DRIVERS" />
-          <View style={styles.notesCard}>
-            {drivers.map((n, i) => (
-              <View key={n.id} style={[styles.noteRow, i > 0 && styles.noteRowBorder]}>
-                <View style={styles.noteBullet} />
-                <Text style={styles.noteText}>{n.body}</Text>
-              </View>
-            ))}
-          </View>
+          <MatchupV2KeyMatchups
+            keyMatchups={summary?.keyMatchups ?? []}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            isLoading={isV2InitialLoading}
+            activePair={filmRoomSource === 'keyMatchup' ? activeKeyMatchupPair : null}
+            onLoadPair={handleLoadKeyMatchup}
+          />
+          {summary ? (
+            <MatchupV2WhoGuarded
+              gameId={gameId ?? ''}
+              status={status}
+              summary={summary}
+            />
+          ) : null}
         </>
-      )}
-
-      {(homeEngines.length > 0 || awayEngines.length > 0) && (
+      ) : (
         <>
-          <SectionHeader icon={<Zap size={12} color={Colors.accent} />} label="PLAYER ENGINES" />
-          <View style={styles.engineGrid}>
-            {[...awayEngines.map(p => ({ p, side: 'away' as const })), ...homeEngines.map(p => ({ p, side: 'home' as const }))].map(({ p, side }) => (
-              <BoxEngineCard
-                key={`${side}-${p.playerId}`}
-                player={p}
-                color={side === 'home' ? homeTeam.primaryColor : awayTeam.primaryColor}
-                teamAbbr={side === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation}
-              />
-            ))}
-          </View>
+          {drivers.length > 0 && (
+            <>
+              <SectionHeader icon={<Activity size={12} color={Colors.warning} />} label="GAME DRIVERS" />
+              <View style={styles.notesCard}>
+                {drivers.map((n, i) => (
+                  <View key={n.id} style={[styles.noteRow, i > 0 && styles.noteRowBorder]}>
+                    <View style={styles.noteBullet} />
+                    <Text style={styles.noteText}>{n.body}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {(homeEngines.length > 0 || awayEngines.length > 0) && (
+            <>
+              <SectionHeader icon={<Zap size={12} color={Colors.accent} />} label="PLAYER ENGINES" />
+              <View style={styles.engineGrid}>
+                {[...awayEngines.map(p => ({ p, side: 'away' as const })), ...homeEngines.map(p => ({ p, side: 'home' as const }))].map(({ p, side }) => (
+                  <BoxEngineCard
+                    key={`${side}-${p.playerId}`}
+                    player={p}
+                    color={side === 'home' ? homeTeam.primaryColor : awayTeam.primaryColor}
+                    teamAbbr={side === 'home' ? homeTeam.abbreviation : awayTeam.abbreviation}
+                  />
+                ))}
+              </View>
+            </>
+          )}
         </>
       )}
 
@@ -564,6 +655,10 @@ function GameStoryView({
         homeBoxScore={homeBoxScore}
         awayBoxScore={awayBoxScore}
         gameId={gameId}
+        selectionRequest={isV2LayoutActive ? filmRoomSelectionRequest : undefined}
+        selectionSource={isV2LayoutActive ? filmRoomSource : 'default'}
+        onSelectionSourceChange={handleFilmRoomSourceChange}
+        onExternalSelectionResolved={handleExternalSelectionResolved}
       />
     </View>
   );
@@ -713,6 +808,10 @@ function MatchupFilmRoom({
   homeBoxScore,
   awayBoxScore,
   gameId,
+  selectionRequest,
+  selectionSource,
+  onSelectionSourceChange,
+  onExternalSelectionResolved,
 }: {
   rawActions?: CdnPbpAction[];
   homeTeam: TeamSide;
@@ -720,6 +819,10 @@ function MatchupFilmRoom({
   homeBoxScore: BoxScorePlayer[];
   awayBoxScore: BoxScorePlayer[];
   gameId?: string;
+  selectionRequest?: FilmRoomPairSelectionRequest;
+  selectionSource: FilmRoomSelectionSource;
+  onSelectionSourceChange: (source: FilmRoomSelectionSource) => void;
+  onExternalSelectionResolved: (wasRepresented: boolean) => void;
 }) {
   const { matchups, isLoading } = useGameMatchups(gameId ?? '', !!gameId);
 
@@ -783,8 +886,23 @@ function MatchupFilmRoom({
   const [offensiveId, setOffensiveId] = useState<string | undefined>(undefined);
   const [defensiveId, setDefensiveId] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState<null | 'offense' | 'defense'>(null);
+  const pendingExternalSelectionRef = React.useRef<FilmRoomPairSelectionRequest | null>(null);
+  const lastHandledSelectionRequestIdRef = React.useRef<number>(0);
 
   React.useEffect(() => {
+    if (!selectionRequest || selectionRequest.requestId === lastHandledSelectionRequestIdRef.current) return;
+    lastHandledSelectionRequestIdRef.current = selectionRequest.requestId;
+    pendingExternalSelectionRef.current = selectionRequest;
+    setOffensiveTeamId(selectionRequest.offenseTeamId);
+    setOffensiveId(selectionRequest.offensePlayerId);
+    setDefensiveId((current: string | undefined) => (
+      current === selectionRequest.defensePlayerId ? current : undefined
+    ));
+    setPickerOpen(null);
+  }, [selectionRequest]);
+
+  React.useEffect(() => {
+    if (pendingExternalSelectionRef.current) return;
     if (!offensiveId && offensiveOptions[0]) {
       setOffensiveId(offensiveOptions[0].playerId);
       return;
@@ -844,6 +962,36 @@ function MatchupFilmRoom({
   }, [matchups, offensiveId, homeTeam, awayTeam, verified, defensiveTeamId, homeBoxScore, awayBoxScore]);
 
   React.useEffect(() => {
+    const pending = pendingExternalSelectionRef.current;
+    if (!pending || offensiveId !== pending.offensePlayerId) return;
+
+    const canRepresentOffense = offensiveOptions.some(option => option.playerId === pending.offensePlayerId);
+    if (!canRepresentOffense) {
+      if (isLoading) return;
+      pendingExternalSelectionRef.current = null;
+      onExternalSelectionResolved(false);
+      return;
+    }
+
+    const canRepresentDefense = defensiveOptions.some(option => option.playerId === pending.defensePlayerId);
+    if (!canRepresentDefense) {
+      if (isLoading) return;
+      pendingExternalSelectionRef.current = null;
+      onExternalSelectionResolved(false);
+      return;
+    }
+
+    if (defensiveId !== pending.defensePlayerId) {
+      setDefensiveId(pending.defensePlayerId);
+      return;
+    }
+
+    pendingExternalSelectionRef.current = null;
+    onExternalSelectionResolved(true);
+  }, [defensiveId, defensiveOptions, isLoading, offensiveId, offensiveOptions, onExternalSelectionResolved]);
+
+  React.useEffect(() => {
+    if (pendingExternalSelectionRef.current) return;
     if (defensiveOptions.length === 0) {
       if (defensiveId !== undefined) setDefensiveId(undefined);
       return;
@@ -853,6 +1001,24 @@ function MatchupFilmRoom({
       setDefensiveId(defensiveOptions[0].playerId);
     }
   }, [defensiveOptions, defensiveId]);
+
+  React.useEffect(() => {
+    if (selectionSource !== 'keyMatchup' || !selectionRequest || pendingExternalSelectionRef.current || isLoading) return;
+    const stillRepresented = offensiveOptions.some(option => option.playerId === selectionRequest.offensePlayerId)
+      && defensiveOptions.some(option => option.playerId === selectionRequest.defensePlayerId)
+      && offensiveId === selectionRequest.offensePlayerId
+      && defensiveId === selectionRequest.defensePlayerId;
+    if (!stillRepresented) onExternalSelectionResolved(false);
+  }, [
+    defensiveId,
+    defensiveOptions,
+    isLoading,
+    offensiveId,
+    offensiveOptions,
+    onExternalSelectionResolved,
+    selectionRequest,
+    selectionSource,
+  ]);
 
   const offensivePlayer = useMemo(
     () => offensiveOptions.find(p => p.playerId === offensiveId),
@@ -864,6 +1030,8 @@ function MatchupFilmRoom({
   );
 
   const onSwap = useCallback(() => {
+    pendingExternalSelectionRef.current = null;
+    onSelectionSourceChange('custom');
     if (verified) {
       if (!defensivePlayer) return;
       const newOffensiveId = defensivePlayer.playerId;
@@ -875,17 +1043,21 @@ function MatchupFilmRoom({
     setOffensiveTeamId(prev => (prev === homeTeam.id ? awayTeam.id : homeTeam.id));
     setOffensiveId(undefined);
     setDefensiveId(undefined);
-  }, [verified, defensivePlayer, offensivePlayer, homeTeam.id, awayTeam.id]);
+  }, [verified, defensivePlayer, offensivePlayer, homeTeam.id, awayTeam.id, onSelectionSourceChange]);
 
   const onSelectOffense = useCallback((id: string) => {
+    pendingExternalSelectionRef.current = null;
+    onSelectionSourceChange('custom');
     setOffensiveId(id);
     setDefensiveId(undefined);
     setPickerOpen(null);
-  }, []);
+  }, [onSelectionSourceChange]);
   const onSelectDefense = useCallback((id: string) => {
+    pendingExternalSelectionRef.current = null;
+    onSelectionSourceChange('custom');
     setDefensiveId(id);
     setPickerOpen(null);
-  }, []);
+  }, [onSelectionSourceChange]);
 
   const season = gameId ? getSeasonFromGameId(gameId) : undefined;
   const seasonType = gameId ? getSeasonTypeFromGameId(gameId) : undefined;
@@ -953,6 +1125,13 @@ function MatchupFilmRoom({
     <>
       <SectionHeader icon={<Film size={12} color={Colors.accent} />} label="MATCHUP FILM ROOM" />
       <View style={styles.filmSelectorCard} testID="matchup-film-room">
+        {selectionSource !== 'default' ? (
+          <View style={styles.filmSourceBadge}>
+            <Text style={styles.filmSourceBadgeText}>
+              {selectionSource === 'keyMatchup' ? 'KEY MATCHUP' : 'CUSTOM MATCHUP'}
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.filmSelectorSubtitle}>
           {verified
             ? 'Pick a real defender that guarded the offensive player to open NBA matchup film.'
@@ -1699,6 +1878,19 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     marginBottom: Spacing.lg,
     gap: Spacing.md,
+  },
+  filmSourceBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accentMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  filmSourceBadgeText: {
+    color: Colors.accent,
+    fontSize: 9,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 1,
   },
   filmSelectorSubtitle: {
     color: Colors.textMuted,

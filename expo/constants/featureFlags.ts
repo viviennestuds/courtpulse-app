@@ -259,6 +259,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     defaultEnabled: false,
   },
   {
+    key: 'matchup_v2_summary_enabled',
+    label: 'Matchup 2.0 Summary',
+    description: 'Show the Matchup 2.0 Key Matchups and Who Guarded Him? summary experience while preserving the current Matchup implementation as fallback.',
+    channel: 'experimental',
+    defaultEnabled: false,
+  },
+  {
     key: 'shots_event_links_enabled',
     label: 'Shot Event Links',
     description: 'Tap the play description in the shot detail sheet to open the NBA.com event page in an in-app browser when a URL is available',

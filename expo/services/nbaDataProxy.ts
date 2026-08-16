@@ -10,12 +10,13 @@ import {
   parsePTToSeconds,
 } from './nbaApi';
 import type { CdnPbpAction, GameDetailData } from './nbaGameData';
+import type { GameMatchupSummaryV2Response } from '@/types/matchupSummaryV2';
 import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
 
 const NBA_DATA_PROXY_BASE_URL = 'https://gikxqfkzmwcujkndoizr.supabase.co/functions/v1/nba-data-proxy';
 const DEFAULT_TIMEOUT_MS = 15000;
 
-export type NbaDataProxyType = 'gamesByDate' | 'boxscore' | 'playbyplay' | 'playoffCatalog' | 'playoffGamesByDate' | 'statsBoxScoreTraditionalV3' | 'statsPlayByPlayV3' | 'statsGameHydration';
+export type NbaDataProxyType = 'gamesByDate' | 'boxscore' | 'playbyplay' | 'playoffCatalog' | 'playoffGamesByDate' | 'statsBoxScoreTraditionalV3' | 'statsPlayByPlayV3' | 'statsGameHydration' | 'statsGameMatchupSummaryV2';
 
 export interface NbaDataProxyBaseResponse {
   success: boolean;
@@ -1194,6 +1195,17 @@ export function getStatsGameHydration(gameId: string): Promise<StatsGameHydratio
   });
   statsGameHydrationRequests.set(gameId, request);
   return request;
+}
+
+/** Fetches the raw Matchup 2.0 summary response through the centralized NBA data proxy. */
+export function getStatsGameMatchupSummaryV2(
+  gameId: string,
+  offensePlayerId?: string,
+): Promise<GameMatchupSummaryV2Response> {
+  return requestProxy<GameMatchupSummaryV2Response>('statsGameMatchupSummaryV2', {
+    gameId,
+    ...(offensePlayerId ? { offensePlayerId } : {}),
+  });
 }
 
 /** Fetches the playoff catalog for future playoff navigation work. */
