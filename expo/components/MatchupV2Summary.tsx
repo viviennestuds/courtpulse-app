@@ -14,6 +14,7 @@ import type { GestureResponderEvent } from 'react-native';
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Film,
   Shield,
@@ -23,6 +24,8 @@ import {
 import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useGameMatchupSummaryV2, MatchupSummaryV2GameStatus } from '@/hooks/useGameMatchupSummaryV2';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import MatchupEventsSheet, { MatchupEventsPairSnapshot } from '@/components/MatchupEventsSheet';
 import type {
   GameMatchupSummaryV2Response,
   MatchupSummaryV2DefenderDistributionRow,
@@ -471,7 +474,21 @@ function MatchupV2PlayerPicker({
   );
 }
 
-function DefenderDistributionRow({ row }: { row: MatchupSummaryV2DefenderDistributionRow }) {
+function DefenderDistributionRow({
+  row,
+  offensePlayerId,
+  offenseName,
+  eventsEnabled = false,
+  disabled = false,
+  onPress,
+}: {
+  row: MatchupSummaryV2DefenderDistributionRow;
+  offensePlayerId: string;
+  offenseName: string;
+  eventsEnabled?: boolean;
+  disabled?: boolean;
+  onPress?: () => void;
+}) {
   const defenderActivity: string[] = [];
   if (row.defenderBlocks > 0) defenderActivity.push(`${row.defenderBlocks} BLK`);
   if (row.defenderShootingFouls > 0) {
@@ -483,14 +500,22 @@ function DefenderDistributionRow({ row }: { row: MatchupSummaryV2DefenderDistrib
   const exposurePercent = Math.max(0, Math.min(100, rawExposurePercent));
   const exposureWidth = `${exposurePercent}%` as `${number}%`;
 
-  return (
-    <View style={styles.defenderRow} testID={`matchup-v2-defender-row-${asId(row.defense.playerId)}`}>
+  const canOpenEvents = eventsEnabled && !disabled && onPress !== undefined;
+  const content = (
+    <>
       <View style={styles.defenderHeader}>
         <View style={styles.defenderIdentity}>
           <Text style={styles.defenderName} numberOfLines={1}>{row.defense.name}</Text>
           <Text style={styles.defenderTeam}>{row.defense.teamTricode}</Text>
         </View>
-        <Text style={styles.defenderExposure}>{row.matchupTime} · {row.partialPossessions.toFixed(1)} poss.</Text>
+        {canOpenEvents ? (
+          <View style={styles.defenderHeaderMeta}>
+            <Text style={styles.defenderExposure}>{row.matchupTime} · {row.partialPossessions.toFixed(1)} poss.</Text>
+            <ChevronRight size={15} color={Colors.textMuted} />
+          </View>
+        ) : (
+          <Text style={styles.defenderExposure}>{row.matchupTime} · {row.partialPossessions.toFixed(1)} poss.</Text>
+        )}
       </View>
       <View
         style={styles.exposureTrack}
@@ -510,7 +535,27 @@ function DefenderDistributionRow({ row }: { row: MatchupSummaryV2DefenderDistrib
           <Text style={styles.defenderActivityText}>{defenderActivity.join(' · ')}</Text>
         </View>
       ) : null}
-    </View>
+    </>
+  );
+
+  if (!canOpenEvents) {
+    return (
+      <View style={styles.defenderRow} testID={`matchup-v2-defender-row-${asId(row.defense.playerId)}`}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }: { pressed: boolean }) => [styles.defenderRow, pressed && styles.defenderRowPressed]}
+      testID={`matchup-v2-defender-events-${offensePlayerId}-${asId(row.defense.playerId)}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${offenseName} versus ${row.defense.name}. View matchup events.`}
+    >
+      {content}
+    </Pressable>
   );
 }
 
@@ -523,9 +568,11 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
   status: MatchupSummaryV2GameStatus;
   summary: GameMatchupSummaryV2Response;
 }) {
+  const eventsEnabled = useFeatureFlag('matchup_v2_events_enabled');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState<boolean>(false);
   const [showAll, setShowAll] = useState<boolean>(false);
+  const [selectedEventsPair, setSelectedEventsPair] = useState<MatchupEventsPairSnapshot | null>(null);
   const initializedGameIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -539,6 +586,7 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
     setSelectedPlayerId(seededPlayerId);
     setPickerOpen(false);
     setShowAll(false);
+    setSelectedEventsPair(null);
   }, [gameId, summary.keyMatchups, summary.offensePlayers]);
 
   const selectedPlayer = useMemo(
@@ -571,6 +619,23 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
       console.log('[MatchupSummaryV2] Who Guarded player selected', { gameId, offensePlayerId: playerId });
     }
   }, [gameId]);
+
+  const handleOpenEvents = useCallback((row: MatchupSummaryV2DefenderDistributionRow) => {
+    if (!eventsEnabled || distributionQuery.isPlaceholderData || !responseMatchesSelection || !selectedOffense) return;
+    setSelectedEventsPair({
+      gameId,
+      offensePlayerId: asId(selectedOffense.offense.playerId),
+      offenseName: selectedOffense.offense.name,
+      offenseTeamId: asId(selectedOffense.offense.teamId),
+      offenseTeamTricode: selectedOffense.offense.teamTricode,
+      defensePlayerId: asId(row.defense.playerId),
+      defenseName: row.defense.name,
+      defenseTeamId: asId(row.defense.teamId),
+      defenseTeamTricode: row.defense.teamTricode,
+      matchupTime: row.matchupTime,
+      partialPossessions: row.partialPossessions,
+    });
+  }, [distributionQuery.isPlaceholderData, eventsEnabled, gameId, responseMatchesSelection, selectedOffense]);
 
   return (
     <View testID="matchup-v2-who-guarded">
@@ -621,7 +686,15 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
               ]}
             >
               {visibleDistribution.map((row: MatchupSummaryV2DefenderDistributionRow) => (
-                <DefenderDistributionRow key={asId(row.defense.playerId)} row={row} />
+                <DefenderDistributionRow
+                  key={asId(row.defense.playerId)}
+                  row={row}
+                  offensePlayerId={selectedPlayerId ?? ''}
+                  offenseName={selectedOffense?.offense.name ?? selectedPlayer?.name ?? 'Offensive player'}
+                  eventsEnabled={eventsEnabled}
+                  disabled={distributionQuery.isPlaceholderData || !responseMatchesSelection}
+                  onPress={() => handleOpenEvents(row)}
+                />
               ))}
             </View>
           )}
@@ -647,6 +720,13 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
         selectedPlayerId={selectedPlayerId}
         onSelect={handleSelect}
         onClose={() => setPickerOpen(false)}
+      />
+      <MatchupEventsSheet
+        visible={eventsEnabled && selectedEventsPair !== null}
+        enabled={eventsEnabled}
+        pair={selectedEventsPair}
+        status={status}
+        onClose={() => setSelectedEventsPair(null)}
       />
     </View>
   );
@@ -921,6 +1001,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.divider,
   },
+  defenderRowPressed: {
+    opacity: 0.72,
+  },
   defenderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -943,6 +1026,11 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 9,
     fontWeight: FontWeight.bold,
+  },
+  defenderHeaderMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   defenderExposure: {
     color: Colors.textMuted,

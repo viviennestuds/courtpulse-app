@@ -11,12 +11,13 @@ import {
 } from './nbaApi';
 import type { CdnPbpAction, GameDetailData } from './nbaGameData';
 import type { GameMatchupSummaryV2Response } from '@/types/matchupSummaryV2';
+import type { GameMatchupEventsV2Response } from '@/types/matchupEventsV2';
 import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
 
 const NBA_DATA_PROXY_BASE_URL = 'https://gikxqfkzmwcujkndoizr.supabase.co/functions/v1/nba-data-proxy';
 const DEFAULT_TIMEOUT_MS = 15000;
 
-export type NbaDataProxyType = 'gamesByDate' | 'boxscore' | 'playbyplay' | 'playoffCatalog' | 'playoffGamesByDate' | 'statsBoxScoreTraditionalV3' | 'statsPlayByPlayV3' | 'statsGameHydration' | 'statsGameMatchupSummaryV2';
+export type NbaDataProxyType = 'gamesByDate' | 'boxscore' | 'playbyplay' | 'playoffCatalog' | 'playoffGamesByDate' | 'statsBoxScoreTraditionalV3' | 'statsPlayByPlayV3' | 'statsGameHydration' | 'statsGameMatchupSummaryV2' | 'statsGameMatchupEventsV2';
 
 export interface NbaDataProxyBaseResponse {
   success: boolean;
@@ -1205,6 +1206,21 @@ export function getStatsGameMatchupSummaryV2(
   return requestProxy<GameMatchupSummaryV2Response>('statsGameMatchupSummaryV2', {
     gameId,
     ...(offensePlayerId ? { offensePlayerId } : {}),
+  });
+}
+
+/** Fetches cheap, pair-specific Matchup 2.0 event evidence without diagnostics. */
+export function getStatsGameMatchupEventsV2(
+  gameId: string,
+  offensePlayerId: string,
+  defensePlayerId: string,
+): Promise<GameMatchupEventsV2Response> {
+  return requestProxy<GameMatchupEventsV2Response>('statsGameMatchupEventsV2', {
+    gameId,
+    offensePlayerId,
+    defensePlayerId,
+    includeRawEvidence: 'false',
+    includeOverlapDiagnostics: 'false',
   });
 }
 

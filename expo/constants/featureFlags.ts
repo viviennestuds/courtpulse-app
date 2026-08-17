@@ -266,6 +266,13 @@ export const FEATURE_FLAGS: FeatureFlagDefinition[] = [
     defaultEnabled: false,
   },
   {
+    key: 'matchup_v2_events_enabled',
+    label: 'Matchup 2.0 Events Evidence',
+    description: 'Tap a defender in Who Guarded Him? to inspect canonical matchup-attributed event evidence for that offense/defense pairing.',
+    channel: 'experimental',
+    defaultEnabled: false,
+  },
+  {
     key: 'shots_event_links_enabled',
     label: 'Shot Event Links',
     description: 'Tap the play description in the shot detail sheet to open the NBA.com event page in an in-app browser when a URL is available',
