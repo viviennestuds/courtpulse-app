@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import {
   Check,
   ChevronDown,
@@ -25,6 +26,7 @@ import { useGameMatchupSummaryV2, MatchupSummaryV2GameStatus } from '@/hooks/use
 import type {
   GameMatchupSummaryV2Response,
   MatchupSummaryV2DefenderDistributionRow,
+  MatchupSummaryV2FactorContext,
   MatchupSummaryV2KeyMatchup,
   MatchupSummaryV2NotabilityReason,
   MatchupSummaryV2OffensePlayer,
@@ -72,22 +74,99 @@ function isSamePair(
     && asId(matchup.pairing.defense.playerId) === activePair.defensePlayerId;
 }
 
-function signed(value: number, suffix: string): string {
-  const prefix = value > 0 ? '+' : '';
-  return `${prefix}${value.toFixed(1)}${suffix}`;
+type MatchupReasonSemantic = 'positive' | 'negative' | 'neutral';
+
+function compactDecimal(value: number, fractionDigits: number): string {
+  return value.toFixed(fractionDigits).replace(/\.0+$/, '');
 }
 
-/** Formats canonical values for display without deriving or re-ranking analytics. */
+function formatPercent(value: number): string {
+  return `${compactDecimal(value * 100, 1)}%`;
+}
+
+function directionArrow(reason: MatchupSummaryV2NotabilityReason): '↑' | '↓' | '' {
+  if (reason.direction === 'higherInMatchup' || reason.direction === 'moreThreePointHeavy') return '↑';
+  if (reason.direction === 'lowerInMatchup' || reason.direction === 'lessThreePointHeavy') return '↓';
+  if (reason.value > 0) return '↑';
+  if (reason.value < 0) return '↓';
+  return '';
+}
+
+/** Formats canonical reason values without deriving or re-ranking analytics. */
 export function formatMatchupV2ReasonValue(reason: MatchupSummaryV2NotabilityReason): string {
-  if (reason.unit === 'efgPctDelta' || reason.unit === 'attemptRateDelta') {
-    return signed(reason.value * 100, ' pp');
+  if (reason.key === 'efficiencySwing' || reason.unit === 'efgPctDelta') {
+    return `${directionArrow(reason)}${compactDecimal(Math.abs(reason.value) * 100, 1)} pp eFG`;
   }
-  if (reason.unit === 'shareOfFullGameTurnovers' || reason.unit === 'freeThrowRate') {
-    return `${(reason.value * 100).toFixed(0)}%`;
+  if (reason.key === 'threePointDietShift' || reason.unit === 'attemptRateDelta') {
+    return `${directionArrow(reason)}${compactDecimal(Math.abs(reason.value) * 100, 1)} pp 3PA rate`;
   }
-  if (reason.unit === 'blocks') return Math.round(reason.value).toString();
-  if (reason.unit === 'partialPossessions') return reason.value.toFixed(1);
+  if (reason.key === 'turnoverConcentration' || reason.unit === 'shareOfFullGameTurnovers') {
+    return `${formatPercent(reason.value)} full-game TOV`;
+  }
+  if (reason.key === 'foulPressure' || reason.unit === 'freeThrowRate') {
+    return `${formatPercent(reason.value)} FTr`;
+  }
+  if (reason.key === 'blockedAttempt' || reason.unit === 'blocks') {
+    return `${compactDecimal(reason.value, 0)} BLK`;
+  }
+  if (reason.key === 'highExposure' || reason.unit === 'partialPossessions') {
+    return `${compactDecimal(reason.value, 1)} poss.`;
+  }
   return Number.isInteger(reason.value) ? reason.value.toString() : reason.value.toFixed(2);
+}
+
+function reasonSemantic(reason: MatchupSummaryV2NotabilityReason): MatchupReasonSemantic {
+  if (reason.key === 'efficiencySwing' || reason.unit === 'efgPctDelta') {
+    if (reason.direction === 'higherInMatchup') return 'positive';
+    if (reason.direction === 'lowerInMatchup') return 'negative';
+    return reason.value > 0 ? 'positive' : 'negative';
+  }
+  if (reason.key === 'turnoverConcentration' || reason.key === 'blockedAttempt' || reason.unit === 'blocks') {
+    return 'negative';
+  }
+  if (reason.key === 'foulPressure' || reason.unit === 'freeThrowRate') return 'positive';
+  return 'neutral';
+}
+
+function semanticColor(semantic: MatchupReasonSemantic): string {
+  if (semantic === 'positive') return Colors.positive;
+  if (semantic === 'negative') return Colors.negative;
+  return Colors.secondary;
+}
+
+function factorContextLine(
+  reason: MatchupSummaryV2NotabilityReason,
+  context: MatchupSummaryV2FactorContext,
+): string | null {
+  if (reason.key === 'efficiencySwing' || reason.unit === 'efgPctDelta') {
+    const selected = context.shooting?.selected?.efgPct;
+    const rest = context.shooting?.restOfGameExclusive?.efgPct;
+    if (typeof selected === 'number' && typeof rest === 'number') {
+      return `${formatPercent(selected)} eFG vs ${formatPercent(rest)} rest of game`;
+    }
+  }
+  if (reason.key === 'threePointDietShift' || reason.unit === 'attemptRateDelta') {
+    const selected = context.shooting?.selected?.threePointAttemptRate;
+    const rest = context.shooting?.restOfGameExclusive?.threePointAttemptRate;
+    if (typeof selected === 'number' && typeof rest === 'number') {
+      return `${formatPercent(selected)} 3PA rate vs ${formatPercent(rest)} rest of game`;
+    }
+  }
+  if (reason.key === 'foulPressure' || reason.unit === 'freeThrowRate') {
+    const selected = context.foulPressure?.freeThrowRate;
+    const rest = context.foulPressure?.restOfGameExclusiveFreeThrowRate;
+    if (typeof selected === 'number' && typeof rest === 'number') {
+      return `${formatPercent(selected)} FTr vs ${formatPercent(rest)} rest of game`;
+    }
+  }
+  if (reason.key === 'turnoverConcentration') {
+    const turnovers = context.ballSecurity?.turnovers;
+    const share = context.ballSecurity?.shareOfFullGameTurnovers;
+    if (typeof turnovers === 'number' && typeof share === 'number') {
+      return `${compactDecimal(turnovers, 0)} TOV · ${formatPercent(share)} of full-game TOV`;
+    }
+  }
+  return null;
 }
 
 function strengthColors(strength: MatchupSummaryV2NotabilityReason['strength']): {
@@ -115,6 +194,32 @@ function teamColorFor(
   return Colors.textMuted;
 }
 
+function KeyMatchupReasonRow({
+  reason,
+  factorContext,
+}: {
+  reason: MatchupSummaryV2NotabilityReason;
+  factorContext: MatchupSummaryV2FactorContext;
+}) {
+  const colors = strengthColors(reason.strength);
+  const contextLine = factorContextLine(reason, factorContext);
+  const valueColor = semanticColor(reasonSemantic(reason));
+
+  return (
+    <View style={styles.reasonBlock}>
+      <View style={styles.reasonRow}>
+        <View style={[styles.reasonStrength, { backgroundColor: colors.backgroundColor, borderColor: colors.borderColor }]}>
+          <Text style={[styles.reasonStrengthText, { color: colors.textColor }]}>{reason.strength.toUpperCase()}</Text>
+        </View>
+        <Text style={styles.reasonText}>
+          {reason.label} · <Text style={[styles.reasonValue, { color: valueColor }]}>{formatMatchupV2ReasonValue(reason)}</Text>
+        </Text>
+      </View>
+      {contextLine ? <Text style={styles.factorContextLine}>{contextLine}</Text> : null}
+    </View>
+  );
+}
+
 function KeyMatchupCard({
   matchup,
   homeTeam,
@@ -131,14 +236,25 @@ function KeyMatchupCard({
   const { offense, defense } = matchup.pairing;
   const offenseColor = teamColorFor(offense, homeTeam, awayTeam);
   const defenseColor = teamColorFor(defense, homeTeam, awayTeam);
-  const shownReasons = matchup.notabilityReasons.slice(0, 2);
-  const hiddenReasonCount = Math.max(0, matchup.notabilityReasons.length - shownReasons.length);
+  const [reasonsExpanded, setReasonsExpanded] = useState<boolean>(false);
+  const initiallyVisibleReasonCount = Math.min(2, matchup.notabilityReasons.length);
+  const visibleReasons = reasonsExpanded
+    ? matchup.notabilityReasons
+    : matchup.notabilityReasons.slice(0, initiallyVisibleReasonCount);
+  const hiddenReasonCount = Math.max(0, matchup.notabilityReasons.length - initiallyVisibleReasonCount);
+  const handleToggleReasons = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+    setReasonsExpanded((value: boolean) => !value);
+  }, []);
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.78}
-      style={[styles.keyMatchupCard, isActive && styles.keyMatchupCardActive]}
+      style={({ pressed }: { pressed: boolean }) => [
+        styles.keyMatchupCard,
+        isActive && styles.keyMatchupCardActive,
+        pressed && styles.keyMatchupCardPressed,
+      ]}
       testID={`matchup-v2-key-matchup-${asId(offense.playerId)}-${asId(defense.playerId)}`}
       accessibilityRole="button"
       accessibilityLabel={`${offense.name} versus ${defense.name}. ${isActive ? 'Loaded in Film Room.' : 'Tap to load in Film Room.'}`}
@@ -172,29 +288,39 @@ function KeyMatchupCard({
         {matchup.boxScore.offense.points} PTS · {matchup.boxScore.offense.fgm}/{matchup.boxScore.offense.fga} FG
       </Text>
 
-      {shownReasons.length > 0 ? (
+      {visibleReasons.length > 0 ? (
         <View style={styles.reasonList}>
-          {shownReasons.map((reason: MatchupSummaryV2NotabilityReason, index: number) => {
-            const colors = strengthColors(reason.strength);
-            return (
-              <View key={`${reason.key}-${index}`} style={styles.reasonRow}>
-                <View style={[styles.reasonStrength, { backgroundColor: colors.backgroundColor, borderColor: colors.borderColor }]}>
-                  <Text style={[styles.reasonStrengthText, { color: colors.textColor }]}>{reason.strength.toUpperCase()}</Text>
-                </View>
-                <Text style={styles.reasonText} numberOfLines={1}>
-                  {reason.label} · {formatMatchupV2ReasonValue(reason)}
-                </Text>
-              </View>
-            );
-          })}
-          {hiddenReasonCount > 0 ? <Text style={styles.moreReasons}>+{hiddenReasonCount} more</Text> : null}
+          {visibleReasons.map((reason: MatchupSummaryV2NotabilityReason, index: number) => (
+            <KeyMatchupReasonRow
+              key={`${reason.key}-${index}`}
+              reason={reason}
+              factorContext={matchup.factorContext}
+            />
+          ))}
+          {hiddenReasonCount > 0 ? (
+            <Pressable
+              onPress={handleToggleReasons}
+              hitSlop={8}
+              style={({ pressed }: { pressed: boolean }) => [styles.moreReasonsButton, pressed && styles.localControlPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={reasonsExpanded ? 'Show fewer matchup signals' : `Show ${hiddenReasonCount} more matchup signals`}
+              testID={`matchup-v2-key-matchup-reasons-${asId(offense.playerId)}-${asId(defense.playerId)}`}
+            >
+              <Text style={styles.moreReasonsText}>
+                {reasonsExpanded
+                  ? 'Show less'
+                  : `+${hiddenReasonCount} more signal${hiddenReasonCount === 1 ? '' : 's'}`}
+              </Text>
+              {reasonsExpanded
+                ? <ChevronUp size={13} color={Colors.secondary} />
+                : <ChevronDown size={13} color={Colors.secondary} />}
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
-      <Text style={[styles.loadAffordance, isActive && styles.loadAffordanceActive]}>
-        {isActive ? 'Loaded in Film Room' : 'Tap to load in Film Room'}
-      </Text>
-    </TouchableOpacity>
+      {!isActive ? <Text style={styles.loadAffordance}>Tap to load in Film Room</Text> : null}
+    </Pressable>
   );
 }
 
@@ -213,7 +339,9 @@ export const MatchupV2KeyMatchups = React.memo(function MatchupV2KeyMatchups({
   activePair: ActiveMatchupV2Pair | null;
   onLoadPair: (selection: MatchupV2PairSelection) => void;
 }) {
+  const [showAllMatchups, setShowAllMatchups] = useState<boolean>(false);
   const activeMatchup = keyMatchups.find((matchup: MatchupSummaryV2KeyMatchup) => isSamePair(matchup, activePair));
+  const visibleMatchups = showAllMatchups ? keyMatchups : keyMatchups.slice(0, 3);
 
   return (
     <View testID="matchup-v2-key-matchups">
@@ -232,7 +360,7 @@ export const MatchupV2KeyMatchups = React.memo(function MatchupV2KeyMatchups({
         </View>
       ) : (
         <View style={styles.keyMatchupList}>
-          {keyMatchups.map((matchup: MatchupSummaryV2KeyMatchup) => {
+          {visibleMatchups.map((matchup: MatchupSummaryV2KeyMatchup) => {
             const offensePlayerId = asId(matchup.pairing.offense.playerId);
             const defensePlayerId = asId(matchup.pairing.defense.playerId);
             return (
@@ -252,6 +380,22 @@ export const MatchupV2KeyMatchups = React.memo(function MatchupV2KeyMatchups({
               />
             );
           })}
+          {keyMatchups.length > 3 ? (
+            <Pressable
+              onPress={() => setShowAllMatchups((value: boolean) => !value)}
+              style={({ pressed }: { pressed: boolean }) => [styles.showAllButton, pressed && styles.localControlPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={showAllMatchups ? 'Show fewer key matchups' : `View all ${keyMatchups.length} key matchups`}
+              testID="matchup-v2-key-matchups-toggle"
+            >
+              <Text style={styles.showAllText}>
+                {showAllMatchups ? 'Show less' : `View all ${keyMatchups.length}`}
+              </Text>
+              {showAllMatchups
+                ? <ChevronUp size={14} color={Colors.secondary} />
+                : <ChevronDown size={14} color={Colors.secondary} />}
+            </Pressable>
+          ) : null}
         </View>
       )}
 
@@ -328,9 +472,16 @@ function MatchupV2PlayerPicker({
 }
 
 function DefenderDistributionRow({ row }: { row: MatchupSummaryV2DefenderDistributionRow }) {
-  const secondary: string[] = [];
-  if (row.defenderBlocks > 0) secondary.push(`${row.defenderBlocks} BLK`);
-  if (row.defenderShootingFouls > 0) secondary.push(`${row.defenderShootingFouls} shooting foul${row.defenderShootingFouls === 1 ? '' : 's'}`);
+  const defenderActivity: string[] = [];
+  if (row.defenderBlocks > 0) defenderActivity.push(`${row.defenderBlocks} BLK`);
+  if (row.defenderShootingFouls > 0) {
+    defenderActivity.push(`${row.defenderShootingFouls} shooting foul${row.defenderShootingFouls === 1 ? '' : 's'}`);
+  }
+  const rawExposurePercent = row.percentageTotalTimeBothOn <= 1
+    ? row.percentageTotalTimeBothOn * 100
+    : row.percentageTotalTimeBothOn;
+  const exposurePercent = Math.max(0, Math.min(100, rawExposurePercent));
+  const exposureWidth = `${exposurePercent}%` as `${number}%`;
 
   return (
     <View style={styles.defenderRow} testID={`matchup-v2-defender-row-${asId(row.defense.playerId)}`}>
@@ -341,12 +492,24 @@ function DefenderDistributionRow({ row }: { row: MatchupSummaryV2DefenderDistrib
         </View>
         <Text style={styles.defenderExposure}>{row.matchupTime} · {row.partialPossessions.toFixed(1)} poss.</Text>
       </View>
+      <View
+        style={styles.exposureTrack}
+        accessibilityLabel={`${compactDecimal(exposurePercent, 1)} percent shared court-time exposure`}
+      >
+        <View style={[styles.exposureFill, { width: exposureWidth }]} />
+      </View>
       <Text style={styles.defenderPrimaryStats}>
         {row.points} PTS · {row.fgm}/{row.fga} FG
       </Text>
       <Text style={styles.defenderSecondaryStats}>
-        {row.assists} AST · {row.turnovers} TOV{secondary.length > 0 ? ` · ${secondary.join(' · ')}` : ''}
+        {row.assists} AST · {row.turnovers} TOV
       </Text>
+      {defenderActivity.length > 0 ? (
+        <View style={styles.defenderActivityRow}>
+          <Text style={styles.defenderActivityLabel}>DEF</Text>
+          <Text style={styles.defenderActivityText}>{defenderActivity.join(' · ')}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -424,10 +587,10 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
             activeOpacity={0.76}
             testID="matchup-v2-who-guarded-selector"
           >
-            <View>
+            <View style={styles.selectorCopy}>
               <Text style={styles.selectorEyebrow}>OFFENSIVE PLAYER</Text>
               <Text style={styles.selectedPlayerName} numberOfLines={1}>
-                {selectedPlayer?.name ?? 'Choose player'}
+                {selectedPlayer ? `${selectedPlayer.name} vs…` : 'Choose player'}
               </Text>
             </View>
             <ChevronDown size={17} color={Colors.textMuted} />
@@ -451,7 +614,12 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
               <Text style={styles.inlineStateText}>Defender distribution unavailable.</Text>
             </View>
           ) : (
-            <View style={styles.defenderList}>
+            <View
+              style={[
+                styles.defenderList,
+                distributionQuery.isPlaceholderData && styles.defenderListPlaceholder,
+              ]}
+            >
               {visibleDistribution.map((row: MatchupSummaryV2DefenderDistributionRow) => (
                 <DefenderDistributionRow key={asId(row.defense.playerId)} row={row} />
               ))}
@@ -511,6 +679,9 @@ const styles = StyleSheet.create({
   keyMatchupCardActive: {
     borderColor: Colors.accent,
     backgroundColor: 'rgba(139,92,246,0.08)',
+  },
+  keyMatchupCardPressed: {
+    opacity: 0.82,
   },
   pairingRow: {
     flexDirection: 'row',
@@ -589,6 +760,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.divider,
   },
+  reasonBlock: {
+    gap: 3,
+  },
   reasonRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -613,18 +787,37 @@ const styles = StyleSheet.create({
     flex: 1,
     fontVariant: ['tabular-nums'] as const,
   },
-  moreReasons: {
+  reasonValue: {
+    fontWeight: FontWeight.semibold,
+  },
+  factorContextLine: {
     color: Colors.textMuted,
-    fontSize: FontSize.xs,
+    fontSize: 10,
+    lineHeight: 14,
     marginLeft: 72,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  moreReasonsButton: {
+    minHeight: 36,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 66,
+    paddingHorizontal: 6,
+  },
+  moreReasonsText: {
+    color: Colors.secondary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+  },
+  localControlPressed: {
+    opacity: 0.58,
   },
   loadAffordance: {
     color: Colors.textMuted,
     fontSize: 10,
     marginTop: Spacing.sm,
-  },
-  loadAffordanceActive: {
-    color: Colors.accent,
   },
   selectionConfirmation: {
     flexDirection: 'row',
@@ -691,6 +884,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
+  selectorCopy: {
+    flex: 1,
+  },
   selectorEyebrow: {
     color: Colors.textMuted,
     fontSize: 9,
@@ -716,6 +912,9 @@ const styles = StyleSheet.create({
   },
   defenderList: {
     paddingHorizontal: Spacing.md,
+  },
+  defenderListPlaceholder: {
+    opacity: 0.52,
   },
   defenderRow: {
     paddingVertical: Spacing.md,
@@ -750,6 +949,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontVariant: ['tabular-nums'] as const,
   },
+  exposureTrack: {
+    height: 3,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: BorderRadius.full,
+    marginTop: 7,
+  },
+  exposureFill: {
+    height: '100%',
+    backgroundColor: Colors.secondary,
+    borderRadius: BorderRadius.full,
+    opacity: 0.55,
+  },
   defenderPrimaryStats: {
     color: Colors.textSecondary,
     fontSize: FontSize.xs,
@@ -761,6 +973,29 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 10,
     marginTop: 2,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  defenderActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 5,
+  },
+  defenderActivityLabel: {
+    color: Colors.secondary,
+    fontSize: 8,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.8,
+    backgroundColor: Colors.secondaryMuted,
+    borderRadius: BorderRadius.sm,
+    overflow: 'hidden',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  defenderActivityText: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontWeight: FontWeight.semibold,
     fontVariant: ['tabular-nums'] as const,
   },
   inlineState: {

@@ -51,6 +51,60 @@ export interface MatchupSummaryV2NotabilityReason {
   explanation: string;
 }
 
+export interface MatchupSummaryV2ShootingContextValues {
+  fga?: number;
+  efgPct?: number | null;
+  threePointAttemptRate?: number | null;
+}
+
+export interface MatchupSummaryV2ShootingDeltaContext {
+  efgPct?: number | null;
+  threePointAttemptRate?: number | null;
+}
+
+export interface MatchupSummaryV2ShootingFactorContext {
+  provenance?: string;
+  selected?: MatchupSummaryV2ShootingContextValues;
+  restOfGameExclusive?: MatchupSummaryV2ShootingContextValues;
+  deltasSelectedMinusRest?: MatchupSummaryV2ShootingDeltaContext;
+}
+
+export interface MatchupSummaryV2BallSecurityFactorContext {
+  provenance?: string;
+  turnovers?: number;
+  shareOfFullGameTurnovers?: number;
+}
+
+export interface MatchupSummaryV2FoulPressureFactorContext {
+  provenance?: string;
+  freeThrowAttempts?: number;
+  freeThrowRate?: number | null;
+  restOfGameExclusiveFreeThrowRate?: number | null;
+  shootingFoulsByDefender?: number;
+}
+
+export interface MatchupSummaryV2CreationFactorContext {
+  provenance?: string;
+  assists?: number;
+  shareOfFullGameAssists?: number;
+}
+
+export interface MatchupSummaryV2DefensiveActivityFactorContext {
+  provenance?: string;
+  blocks?: number;
+  shootingFouls?: number;
+}
+
+/** Display-focused subset of canonical factor context; unknown future fields remain pass-through. */
+export interface MatchupSummaryV2FactorContext {
+  shooting?: MatchupSummaryV2ShootingFactorContext;
+  ballSecurity?: MatchupSummaryV2BallSecurityFactorContext;
+  foulPressure?: MatchupSummaryV2FoulPressureFactorContext;
+  creation?: MatchupSummaryV2CreationFactorContext;
+  defensiveActivity?: MatchupSummaryV2DefensiveActivityFactorContext;
+  [key: string]: unknown;
+}
+
 export interface MatchupSummaryV2SelectionProfile {
   highestStrength: MatchupSummaryV2ReasonStrength;
   majorReasonCount: number;
@@ -83,7 +137,7 @@ export interface MatchupSummaryV2KeyMatchup {
     defense: MatchupSummaryV2PlayerIdentity;
   };
   boxScore: MatchupSummaryV2BoxScore;
-  factorContext: Record<string, unknown>;
+  factorContext: MatchupSummaryV2FactorContext;
   notabilityReasons: MatchupSummaryV2NotabilityReason[];
   selectionProfile: MatchupSummaryV2SelectionProfile;
   capabilities: MatchupSummaryV2Capabilities;
@@ -143,6 +197,18 @@ function isNullableFiniteNumber(value: unknown): value is number | null {
   return value === null || isFiniteNumber(value);
 }
 
+function hasOptionalString(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || typeof value[key] === 'string';
+}
+
+function hasOptionalFiniteNumber(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || isFiniteNumber(value[key]);
+}
+
+function hasOptionalNullableFiniteNumber(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || isNullableFiniteNumber(value[key]);
+}
+
 function isId(value: unknown): value is MatchupSummaryV2Id {
   return (typeof value === 'string' && value.trim().length > 0) || isFiniteNumber(value);
 }
@@ -179,6 +245,66 @@ function isBoxScore(value: unknown): value is MatchupSummaryV2BoxScore {
     && hasFiniteNumbers(value, ['matchupSeconds', 'partialPossessions', 'percentageTotalTimeBothOn'])
     && isOffenseBoxScore(value.offense)
     && isDefenseBoxScore(value.defense);
+}
+
+function isShootingContextValues(value: unknown): value is MatchupSummaryV2ShootingContextValues {
+  return isRecord(value)
+    && hasOptionalFiniteNumber(value, 'fga')
+    && hasOptionalNullableFiniteNumber(value, 'efgPct')
+    && hasOptionalNullableFiniteNumber(value, 'threePointAttemptRate');
+}
+
+function isShootingDeltaContext(value: unknown): value is MatchupSummaryV2ShootingDeltaContext {
+  return isRecord(value)
+    && hasOptionalNullableFiniteNumber(value, 'efgPct')
+    && hasOptionalNullableFiniteNumber(value, 'threePointAttemptRate');
+}
+
+function isShootingFactorContext(value: unknown): value is MatchupSummaryV2ShootingFactorContext {
+  return isRecord(value)
+    && hasOptionalString(value, 'provenance')
+    && (value.selected === undefined || isShootingContextValues(value.selected))
+    && (value.restOfGameExclusive === undefined || isShootingContextValues(value.restOfGameExclusive))
+    && (value.deltasSelectedMinusRest === undefined || isShootingDeltaContext(value.deltasSelectedMinusRest));
+}
+
+function isBallSecurityFactorContext(value: unknown): value is MatchupSummaryV2BallSecurityFactorContext {
+  return isRecord(value)
+    && hasOptionalString(value, 'provenance')
+    && hasOptionalFiniteNumber(value, 'turnovers')
+    && hasOptionalFiniteNumber(value, 'shareOfFullGameTurnovers');
+}
+
+function isFoulPressureFactorContext(value: unknown): value is MatchupSummaryV2FoulPressureFactorContext {
+  return isRecord(value)
+    && hasOptionalString(value, 'provenance')
+    && hasOptionalFiniteNumber(value, 'freeThrowAttempts')
+    && hasOptionalNullableFiniteNumber(value, 'freeThrowRate')
+    && hasOptionalNullableFiniteNumber(value, 'restOfGameExclusiveFreeThrowRate')
+    && hasOptionalFiniteNumber(value, 'shootingFoulsByDefender');
+}
+
+function isCreationFactorContext(value: unknown): value is MatchupSummaryV2CreationFactorContext {
+  return isRecord(value)
+    && hasOptionalString(value, 'provenance')
+    && hasOptionalFiniteNumber(value, 'assists')
+    && hasOptionalFiniteNumber(value, 'shareOfFullGameAssists');
+}
+
+function isDefensiveActivityFactorContext(value: unknown): value is MatchupSummaryV2DefensiveActivityFactorContext {
+  return isRecord(value)
+    && hasOptionalString(value, 'provenance')
+    && hasOptionalFiniteNumber(value, 'blocks')
+    && hasOptionalFiniteNumber(value, 'shootingFouls');
+}
+
+function isFactorContext(value: unknown): value is MatchupSummaryV2FactorContext {
+  return isRecord(value)
+    && (value.shooting === undefined || isShootingFactorContext(value.shooting))
+    && (value.ballSecurity === undefined || isBallSecurityFactorContext(value.ballSecurity))
+    && (value.foulPressure === undefined || isFoulPressureFactorContext(value.foulPressure))
+    && (value.creation === undefined || isCreationFactorContext(value.creation))
+    && (value.defensiveActivity === undefined || isDefensiveActivityFactorContext(value.defensiveActivity));
 }
 
 function isReasonStrength(value: unknown): value is MatchupSummaryV2ReasonStrength {
@@ -221,7 +347,7 @@ function isKeyMatchup(value: unknown): value is MatchupSummaryV2KeyMatchup {
   return isPlayerIdentity(value.pairing.offense)
     && isPlayerIdentity(value.pairing.defense)
     && isBoxScore(value.boxScore)
-    && isRecord(value.factorContext)
+    && isFactorContext(value.factorContext)
     && value.notabilityReasons.every(isNotabilityReason)
     && isSelectionProfile(value.selectionProfile)
     && isCapabilities(value.capabilities);
