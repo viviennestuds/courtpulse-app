@@ -1,5 +1,10 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { fetchGameMatchupSummaryV2 } from '@/services/matchupSummaryV2';
+import {
+  gameMatchupSummaryV2QueryKey,
+  gameMatchupSummaryV2RetryDelay,
+  shouldRetryGameMatchupSummaryV2,
+} from '@/services/matchupSummaryV2QueryPolicy';
 
 export type MatchupSummaryV2GameStatus = 'live' | 'final' | 'scheduled';
 
@@ -21,13 +26,13 @@ export function useGameMatchupSummaryV2({
   const isSupportedStatus = isLive || status === 'final';
 
   return useQuery({
-    queryKey: ['gameMatchupSummaryV2', gameId, offensePlayerId ?? 'all'],
+    queryKey: gameMatchupSummaryV2QueryKey(gameId, offensePlayerId),
     queryFn: () => fetchGameMatchupSummaryV2(gameId, offensePlayerId),
     enabled: enabled && isSupportedStatus && gameId.length > 0 && (offensePlayerId === undefined || offensePlayerId.length > 0),
     staleTime: isLive ? 20000 : 1000 * 60 * 60,
     gcTime: 1000 * 60 * 60,
     refetchInterval: isLive ? 30000 : false,
-    retry: 1,
-    placeholderData: offensePlayerId ? keepPreviousData : undefined,
+    retry: shouldRetryGameMatchupSummaryV2,
+    retryDelay: gameMatchupSummaryV2RetryDelay,
   });
 }

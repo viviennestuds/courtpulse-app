@@ -10,7 +10,6 @@ import {
   parsePTToSeconds,
 } from './nbaApi';
 import type { CdnPbpAction, GameDetailData } from './nbaGameData';
-import type { GameMatchupSummaryV2Response } from '@/types/matchupSummaryV2';
 import type { GameMatchupEventsV2Response } from '@/types/matchupEventsV2';
 import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
 
@@ -34,6 +33,8 @@ export interface NbaDataProxyBaseResponse {
   sourceUrl?: string;
   httpStatus?: number;
   statusText?: string;
+  clientErrorCategory?: 'network' | 'timeout' | 'invalidJson';
+  retryAfterMs?: number;
   contentType?: string;
   gameCount?: number;
   attempts?: unknown;
@@ -224,39 +225,72 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
+function parseRetryAfterMs(value: string | null): number | undefined {
+  if (!value?.trim()) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return undefined;
+  return Math.max(0, timestamp - Date.now());
+}
+
 async function requestProxy<T extends NbaDataProxyBaseResponse>(type: NbaDataProxyType, params: Record<string, string> = {}): Promise<T> {
   const url = buildProxyUrl(type, params);
   try {
     const response = await fetchWithTimeout(url);
     const text = await response.text();
-    const parsed = text ? JSON.parse(text) as unknown : null;
+    const retryAfterMs = parseRetryAfterMs(response.headers.get('Retry-After'));
+    let parsed: unknown = null;
+    if (text) {
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch {
+        return {
+          success: false,
+          type,
+          httpStatus: response.status,
+          statusText: response.statusText,
+          clientErrorCategory: 'invalidJson',
+          ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+          error: 'NBA data proxy returned invalid JSON',
+        } as T;
+      }
+    }
+    const parsedEnvelope = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
     if (!response.ok) {
       return {
+        ...parsedEnvelope,
         success: false,
         type,
         httpStatus: response.status,
         statusText: response.statusText,
+        ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
         error: `NBA data proxy returned ${response.status}`,
-        message: typeof parsed === 'object' && parsed !== null ? String((parsed as Record<string, unknown>).message ?? '') : '',
       } as T;
     }
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {
         success: false,
         type,
         httpStatus: response.status,
         statusText: response.statusText,
+        clientErrorCategory: 'invalidJson',
         error: 'NBA data proxy returned an empty or invalid JSON response',
       } as T;
     }
     return parsed as T;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[NBADataProxy] ${type} request unavailable: ${message}`);
+    const isTimeout = error instanceof Error && error.name === 'AbortError';
+    if (__DEV__) {
+      console.warn(`[NBADataProxy] ${type} request ${isTimeout ? 'timed out' : 'failed'}`);
+    }
     return {
       success: false,
       type,
-      error: message,
+      clientErrorCategory: isTimeout ? 'timeout' : 'network',
+      error: isTimeout ? 'NBA data proxy request timed out' : 'NBA data proxy network request failed',
     } as T;
   }
 }
@@ -1202,8 +1236,8 @@ export function getStatsGameHydration(gameId: string): Promise<StatsGameHydratio
 export function getStatsGameMatchupSummaryV2(
   gameId: string,
   offensePlayerId?: string,
-): Promise<GameMatchupSummaryV2Response> {
-  return requestProxy<GameMatchupSummaryV2Response>('statsGameMatchupSummaryV2', {
+): Promise<unknown> {
+  return requestProxy<NbaDataProxyBaseResponse>('statsGameMatchupSummaryV2', {
     gameId,
     ...(offensePlayerId ? { offensePlayerId } : {}),
   });

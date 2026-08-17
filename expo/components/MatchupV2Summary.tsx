@@ -603,25 +603,25 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
   const selectedOffense = distributionQuery.data?.selectedOffense ?? null;
   const responseMatchesSelection = selectedOffense !== null
     && asId(selectedOffense.offense.playerId) === selectedPlayerId;
-  const canShowPreviousDistribution = distributionQuery.isPlaceholderData && selectedOffense !== null;
-  const distribution = responseMatchesSelection || canShowPreviousDistribution
+  const distribution = responseMatchesSelection
     ? selectedOffense?.defenderDistribution ?? []
     : [];
   const visibleDistribution = showAll ? distribution : distribution.slice(0, 5);
   const hasContainedError = distributionQuery.isError
-    || (!distributionQuery.isPending && !distributionQuery.isPlaceholderData && !responseMatchesSelection);
+    || (!distributionQuery.isPending && !responseMatchesSelection);
 
   const handleSelect = useCallback((playerId: string) => {
     setSelectedPlayerId(playerId);
     setPickerOpen(false);
     setShowAll(false);
+    setSelectedEventsPair(null);
     if (__DEV__) {
       console.log('[MatchupSummaryV2] Who Guarded player selected', { gameId, offensePlayerId: playerId });
     }
   }, [gameId]);
 
   const handleOpenEvents = useCallback((row: MatchupSummaryV2DefenderDistributionRow) => {
-    if (!eventsEnabled || distributionQuery.isPlaceholderData || !responseMatchesSelection || !selectedOffense) return;
+    if (!eventsEnabled || distributionQuery.isFetching || !responseMatchesSelection || !selectedOffense) return;
     setSelectedEventsPair({
       gameId,
       offensePlayerId: asId(selectedOffense.offense.playerId),
@@ -635,7 +635,7 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
       matchupTime: row.matchupTime,
       partialPossessions: row.partialPossessions,
     });
-  }, [distributionQuery.isPlaceholderData, eventsEnabled, gameId, responseMatchesSelection, selectedOffense]);
+  }, [distributionQuery.isFetching, eventsEnabled, gameId, responseMatchesSelection, selectedOffense]);
 
   return (
     <View testID="matchup-v2-who-guarded">
@@ -680,10 +680,7 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
             </View>
           ) : (
             <View
-              style={[
-                styles.defenderList,
-                distributionQuery.isPlaceholderData && styles.defenderListPlaceholder,
-              ]}
+              style={styles.defenderList}
             >
               {visibleDistribution.map((row: MatchupSummaryV2DefenderDistributionRow) => (
                 <DefenderDistributionRow
@@ -692,7 +689,7 @@ export const MatchupV2WhoGuarded = React.memo(function MatchupV2WhoGuarded({
                   offensePlayerId={selectedPlayerId ?? ''}
                   offenseName={selectedOffense?.offense.name ?? selectedPlayer?.name ?? 'Offensive player'}
                   eventsEnabled={eventsEnabled}
-                  disabled={distributionQuery.isPlaceholderData || !responseMatchesSelection}
+                  disabled={distributionQuery.isFetching || !responseMatchesSelection}
                   onPress={() => handleOpenEvents(row)}
                 />
               ))}
@@ -992,9 +989,6 @@ const styles = StyleSheet.create({
   },
   defenderList: {
     paddingHorizontal: Spacing.md,
-  },
-  defenderListPlaceholder: {
-    opacity: 0.52,
   },
   defenderRow: {
     paddingVertical: Spacing.md,

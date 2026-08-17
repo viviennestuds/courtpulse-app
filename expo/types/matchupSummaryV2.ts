@@ -72,7 +72,8 @@ export interface MatchupSummaryV2ShootingFactorContext {
 export interface MatchupSummaryV2BallSecurityFactorContext {
   provenance?: string;
   turnovers?: number;
-  shareOfFullGameTurnovers?: number;
+  /** Optional context field; null means the full-game turnover denominator is not meaningful. */
+  shareOfFullGameTurnovers?: number | null;
 }
 
 export interface MatchupSummaryV2FoulPressureFactorContext {
@@ -86,7 +87,8 @@ export interface MatchupSummaryV2FoulPressureFactorContext {
 export interface MatchupSummaryV2CreationFactorContext {
   provenance?: string;
   assists?: number;
-  shareOfFullGameAssists?: number;
+  /** Optional context field; null means the full-game assist denominator is not meaningful. */
+  shareOfFullGameAssists?: number | null;
 }
 
 export interface MatchupSummaryV2DefensiveActivityFactorContext {
@@ -272,7 +274,7 @@ function isBallSecurityFactorContext(value: unknown): value is MatchupSummaryV2B
   return isRecord(value)
     && hasOptionalString(value, 'provenance')
     && hasOptionalFiniteNumber(value, 'turnovers')
-    && hasOptionalFiniteNumber(value, 'shareOfFullGameTurnovers');
+    && hasOptionalNullableFiniteNumber(value, 'shareOfFullGameTurnovers');
 }
 
 function isFoulPressureFactorContext(value: unknown): value is MatchupSummaryV2FoulPressureFactorContext {
@@ -288,7 +290,7 @@ function isCreationFactorContext(value: unknown): value is MatchupSummaryV2Creat
   return isRecord(value)
     && hasOptionalString(value, 'provenance')
     && hasOptionalFiniteNumber(value, 'assists')
-    && hasOptionalFiniteNumber(value, 'shareOfFullGameAssists');
+    && hasOptionalNullableFiniteNumber(value, 'shareOfFullGameAssists');
 }
 
 function isDefensiveActivityFactorContext(value: unknown): value is MatchupSummaryV2DefensiveActivityFactorContext {
@@ -374,23 +376,290 @@ function isSelectedOffense(value: unknown): value is MatchupSummaryV2SelectedOff
   return isPlayerIdentity(value.offense) && value.defenderDistribution.every(isDefenderDistributionRow);
 }
 
+export type MatchupSummaryV2ValidationCategory =
+  | 'contractReleaseMismatch'
+  | 'schemaMismatch'
+  | 'gameIdMismatch'
+  | 'pairIdentityMismatch'
+  | 'structuralValidation';
+
+export type MatchupSummaryV2ValidationResult =
+  | { ok: true; data: GameMatchupSummaryV2Response }
+  | {
+    ok: false;
+    category: MatchupSummaryV2ValidationCategory;
+    path: string;
+    reason: string;
+  };
+
+function validationFailure(
+  category: MatchupSummaryV2ValidationCategory,
+  path: string,
+  reason: string,
+): MatchupSummaryV2ValidationResult {
+  return { ok: false, category, path, reason };
+}
+
+function requiredFiniteFieldsFailure(
+  value: Record<string, unknown>,
+  keys: string[],
+  path: string,
+): MatchupSummaryV2ValidationResult | null {
+  const key = keys.find((candidate: string) => !isFiniteNumber(value[candidate]));
+  return key
+    ? validationFailure('structuralValidation', `${path}.${key}`, 'expected a finite number')
+    : null;
+}
+
+function playerIdentityFailure(value: unknown, path: string): MatchupSummaryV2ValidationResult | null {
+  if (!isRecord(value)) return validationFailure('pairIdentityMismatch', path, 'expected a player identity object');
+  if (!isId(value.playerId)) return validationFailure('pairIdentityMismatch', `${path}.playerId`, 'expected a non-empty string or finite number');
+  if (typeof value.name !== 'string' || value.name.trim().length === 0) {
+    return validationFailure('pairIdentityMismatch', `${path}.name`, 'expected a non-empty player name');
+  }
+  if (!isId(value.teamId)) return validationFailure('pairIdentityMismatch', `${path}.teamId`, 'expected a non-empty string or finite number');
+  if (typeof value.teamTricode !== 'string') {
+    return validationFailure('pairIdentityMismatch', `${path}.teamTricode`, 'expected a team tricode string');
+  }
+  return null;
+}
+
+function optionalFieldFailure(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  accepts: (candidate: unknown) => boolean,
+  expectation: string,
+): MatchupSummaryV2ValidationResult | null {
+  if (!(key in value) || accepts(value[key])) return null;
+  return validationFailure('structuralValidation', `${path}.${key}`, expectation);
+}
+
+function boxScoreFailure(value: unknown, path: string): MatchupSummaryV2ValidationResult | null {
+  if (!isRecord(value)) return validationFailure('structuralValidation', path, 'expected a box score object');
+  if (typeof value.matchupTime !== 'string') {
+    return validationFailure('structuralValidation', `${path}.matchupTime`, 'expected a matchup time string');
+  }
+  const exposureFailure = requiredFiniteFieldsFailure(
+    value,
+    ['matchupSeconds', 'partialPossessions', 'percentageTotalTimeBothOn'],
+    path,
+  );
+  if (exposureFailure) return exposureFailure;
+  if (!isRecord(value.offense)) {
+    return validationFailure('structuralValidation', `${path}.offense`, 'expected an offense box score object');
+  }
+  const offenseFailure = requiredFiniteFieldsFailure(
+    value.offense,
+    ['points', 'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta', 'assists', 'turnovers'],
+    `${path}.offense`,
+  );
+  if (offenseFailure) return offenseFailure;
+  if (!isNullableFiniteNumber(value.offense.efgPct)) {
+    return validationFailure('structuralValidation', `${path}.offense.efgPct`, 'expected a finite number or null');
+  }
+  if (!isNullableFiniteNumber(value.offense.freeThrowRate)) {
+    return validationFailure('structuralValidation', `${path}.offense.freeThrowRate`, 'expected a finite number or null');
+  }
+  if (!isRecord(value.defense)) {
+    return validationFailure('structuralValidation', `${path}.defense`, 'expected a defense box score object');
+  }
+  return requiredFiniteFieldsFailure(value.defense, ['blocks', 'shootingFouls'], `${path}.defense`);
+}
+
+function factorContextFailure(value: unknown, path: string): MatchupSummaryV2ValidationResult | null {
+  if (!isRecord(value)) return validationFailure('structuralValidation', path, 'expected a factor context object');
+  const blocks: {
+    key: string;
+    finite: string[];
+    nullable: string[];
+  }[] = [
+    { key: 'ballSecurity', finite: ['turnovers'], nullable: ['shareOfFullGameTurnovers'] },
+    {
+      key: 'foulPressure',
+      finite: ['freeThrowAttempts', 'shootingFoulsByDefender'],
+      nullable: ['freeThrowRate', 'restOfGameExclusiveFreeThrowRate'],
+    },
+    { key: 'creation', finite: ['assists'], nullable: ['shareOfFullGameAssists'] },
+    { key: 'defensiveActivity', finite: ['blocks', 'shootingFouls'], nullable: [] },
+  ];
+  for (const block of blocks) {
+    const blockValue = value[block.key];
+    if (blockValue === undefined) continue;
+    const blockPath = `${path}.${block.key}`;
+    if (!isRecord(blockValue)) return validationFailure('structuralValidation', blockPath, 'expected an object');
+    const provenanceFailure = optionalFieldFailure(
+      blockValue,
+      'provenance',
+      blockPath,
+      (candidate: unknown) => typeof candidate === 'string',
+      'expected a string when supplied',
+    );
+    if (provenanceFailure) return provenanceFailure;
+    for (const key of block.finite) {
+      const failure = optionalFieldFailure(
+        blockValue,
+        key,
+        blockPath,
+        isFiniteNumber,
+        'expected a finite number when supplied',
+      );
+      if (failure) return failure;
+    }
+    for (const key of block.nullable) {
+      const failure = optionalFieldFailure(
+        blockValue,
+        key,
+        blockPath,
+        isNullableFiniteNumber,
+        'expected a finite number or null when supplied',
+      );
+      if (failure) return failure;
+    }
+  }
+  if (value.shooting !== undefined && !isShootingFactorContext(value.shooting)) {
+    return validationFailure('structuralValidation', `${path}.shooting`, 'malformed shooting factor context');
+  }
+  return null;
+}
+
+function keyMatchupFailure(value: unknown, path: string): MatchupSummaryV2ValidationResult | null {
+  if (!isRecord(value)) return validationFailure('structuralValidation', path, 'expected a key matchup object');
+  if (!isRecord(value.pairing)) return validationFailure('pairIdentityMismatch', `${path}.pairing`, 'expected a pairing object');
+  const offenseFailure = playerIdentityFailure(value.pairing.offense, `${path}.pairing.offense`);
+  if (offenseFailure) return offenseFailure;
+  const defenseFailure = playerIdentityFailure(value.pairing.defense, `${path}.pairing.defense`);
+  if (defenseFailure) return defenseFailure;
+  const boxFailure = boxScoreFailure(value.boxScore, `${path}.boxScore`);
+  if (boxFailure) return boxFailure;
+  const factorFailure = factorContextFailure(value.factorContext, `${path}.factorContext`);
+  if (factorFailure) return factorFailure;
+  if (!Array.isArray(value.notabilityReasons)) {
+    return validationFailure('structuralValidation', `${path}.notabilityReasons`, 'expected an array');
+  }
+  const malformedReasonIndex = value.notabilityReasons.findIndex((reason: unknown) => !isNotabilityReason(reason));
+  if (malformedReasonIndex >= 0) {
+    return validationFailure('structuralValidation', `${path}.notabilityReasons[${malformedReasonIndex}]`, 'malformed notability reason');
+  }
+  if (!isSelectionProfile(value.selectionProfile)) {
+    return validationFailure('structuralValidation', `${path}.selectionProfile`, 'malformed selection profile');
+  }
+  if (!isCapabilities(value.capabilities)) {
+    return validationFailure('structuralValidation', `${path}.capabilities`, 'malformed capabilities');
+  }
+  if (!isKeyMatchup(value)) return validationFailure('structuralValidation', path, 'malformed key matchup');
+  return null;
+}
+
+function offensePlayerFailure(value: unknown, path: string): MatchupSummaryV2ValidationResult | null {
+  const identityFailure = playerIdentityFailure(value, path);
+  if (identityFailure) return identityFailure;
+  if (!isRecord(value)) return validationFailure('structuralValidation', path, 'expected an offense player object');
+  const numericFailure = requiredFiniteFieldsFailure(value, ['matchupCount', 'maxPartialPossessions'], path);
+  if (numericFailure) return numericFailure;
+  return isOffensePlayer(value)
+    ? null
+    : validationFailure('structuralValidation', path, 'malformed offense player');
+}
+
+function selectedOffenseFailure(value: unknown, path: string): MatchupSummaryV2ValidationResult | null {
+  if (!isRecord(value)) return validationFailure('structuralValidation', path, 'expected a selected offense object');
+  const identityFailure = playerIdentityFailure(value.offense, `${path}.offense`);
+  if (identityFailure) return identityFailure;
+  if (!Array.isArray(value.defenderDistribution)) {
+    return validationFailure('structuralValidation', `${path}.defenderDistribution`, 'expected an array');
+  }
+  for (let index = 0; index < value.defenderDistribution.length; index += 1) {
+    const row = value.defenderDistribution[index];
+    const rowPath = `${path}.defenderDistribution[${index}]`;
+    if (!isRecord(row)) return validationFailure('structuralValidation', rowPath, 'expected a defender distribution row');
+    const defenseFailure = playerIdentityFailure(row.defense, `${rowPath}.defense`);
+    if (defenseFailure) return defenseFailure;
+    if (typeof row.matchupTime !== 'string') {
+      return validationFailure('structuralValidation', `${rowPath}.matchupTime`, 'expected a matchup time string');
+    }
+    const numericFailure = requiredFiniteFieldsFailure(row, [
+      'matchupSeconds', 'partialPossessions', 'percentageTotalTimeBothOn', 'points', 'fgm', 'fga',
+      'assists', 'turnovers', 'defenderBlocks', 'defenderShootingFouls',
+    ], rowPath);
+    if (numericFailure) return numericFailure;
+  }
+  return isSelectedOffense(value)
+    ? null
+    : validationFailure('structuralValidation', path, 'malformed selected offense');
+}
+
+function normalizeId(value: MatchupSummaryV2Id | string): string {
+  return String(value).trim();
+}
+
+/** Validates v1.1 strictly and preserves the first useful contract failure path. */
+export function validateGameMatchupSummaryV2Response(
+  value: unknown,
+  expectedGameId?: string,
+  expectedOffensePlayerId?: string,
+): MatchupSummaryV2ValidationResult {
+  if (!isRecord(value)) return validationFailure('structuralValidation', '$', 'expected a response object');
+  if (value.success !== true) return validationFailure('structuralValidation', '$.success', 'expected true');
+  if (value.type !== MATCHUP_SUMMARY_V2_PROXY_TYPE) {
+    return validationFailure('structuralValidation', '$.type', `expected ${MATCHUP_SUMMARY_V2_PROXY_TYPE}`);
+  }
+  if (typeof value.gameId !== 'string') {
+    return validationFailure('structuralValidation', '$.gameId', 'expected a game ID string');
+  }
+  if (expectedGameId !== undefined && normalizeId(value.gameId) !== normalizeId(expectedGameId)) {
+    return validationFailure('gameIdMismatch', '$.gameId', 'returned game ID does not match the request');
+  }
+  if (value.contractRelease !== MATCHUP_SUMMARY_V2_CONTRACT_RELEASE) {
+    return validationFailure('contractReleaseMismatch', '$.contractRelease', `expected ${MATCHUP_SUMMARY_V2_CONTRACT_RELEASE}`);
+  }
+  if (value.schemaVersion !== MATCHUP_SUMMARY_V2_SCHEMA_VERSION) {
+    return validationFailure('schemaMismatch', '$.schemaVersion', `expected ${MATCHUP_SUMMARY_V2_SCHEMA_VERSION}`);
+  }
+  if (value.sourceStatus !== 'ok') {
+    return validationFailure('structuralValidation', '$.sourceStatus', 'expected ok');
+  }
+  if (value.errorCategory !== null) {
+    return validationFailure('structuralValidation', '$.errorCategory', 'expected null for a successful response');
+  }
+  for (const key of ['orientation', 'selectionPolicy', 'sources', 'dataQuality']) {
+    if (!isRecord(value[key])) return validationFailure('structuralValidation', `$.${key}`, 'expected an object');
+  }
+  if (!Array.isArray(value.keyMatchups)) {
+    return validationFailure('structuralValidation', '$.keyMatchups', 'expected an array');
+  }
+  for (let index = 0; index < value.keyMatchups.length; index += 1) {
+    const failure = keyMatchupFailure(value.keyMatchups[index], `$.keyMatchups[${index}]`);
+    if (failure) return failure;
+  }
+  if (!Array.isArray(value.offensePlayers)) {
+    return validationFailure('structuralValidation', '$.offensePlayers', 'expected an array');
+  }
+  for (let index = 0; index < value.offensePlayers.length; index += 1) {
+    const failure = offensePlayerFailure(value.offensePlayers[index], `$.offensePlayers[${index}]`);
+    if (failure) return failure;
+  }
+  if (value.selectedOffense !== null) {
+    const failure = selectedOffenseFailure(value.selectedOffense, '$.selectedOffense');
+    if (failure) return failure;
+    if (
+      expectedOffensePlayerId !== undefined
+      && isRecord(value.selectedOffense)
+      && isRecord(value.selectedOffense.offense)
+      && isId(value.selectedOffense.offense.playerId)
+      && normalizeId(value.selectedOffense.offense.playerId) !== normalizeId(expectedOffensePlayerId)
+    ) {
+      return validationFailure(
+        'pairIdentityMismatch',
+        '$.selectedOffense.offense.playerId',
+        'returned offense player does not match the request',
+      );
+    }
+  }
+  return { ok: true, data: value as unknown as GameMatchupSummaryV2Response };
+}
+
 /** Strictly accepts only the frozen Matchup Summary v1.1 canonical contract. */
 export function isGameMatchupSummaryV2Response(value: unknown): value is GameMatchupSummaryV2Response {
-  if (!isRecord(value)) return false;
-  return value.success === true
-    && value.type === MATCHUP_SUMMARY_V2_PROXY_TYPE
-    && typeof value.gameId === 'string'
-    && value.contractRelease === MATCHUP_SUMMARY_V2_CONTRACT_RELEASE
-    && value.schemaVersion === MATCHUP_SUMMARY_V2_SCHEMA_VERSION
-    && value.sourceStatus === 'ok'
-    && (value.errorCategory === null || typeof value.errorCategory === 'string')
-    && isRecord(value.orientation)
-    && isRecord(value.selectionPolicy)
-    && Array.isArray(value.keyMatchups)
-    && value.keyMatchups.every(isKeyMatchup)
-    && Array.isArray(value.offensePlayers)
-    && value.offensePlayers.every(isOffensePlayer)
-    && (value.selectedOffense === null || isSelectedOffense(value.selectedOffense))
-    && isRecord(value.sources)
-    && isRecord(value.dataQuality);
+  return validateGameMatchupSummaryV2Response(value).ok;
 }

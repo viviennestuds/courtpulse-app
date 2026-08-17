@@ -1,12 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, FlatList, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { Film, Info, Flame, Target, Activity, Zap, ChevronDown, ArrowLeftRight, X } from 'lucide-react-native';
+import { Film, Info, Flame, Target, Activity, Zap, ChevronDown, ArrowLeftRight, RotateCcw, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import { BoxScorePlayer, Team, Player, ScoringRun } from '@/types';
 import { useTeams, usePlayers, useGameMatchups } from '@/hooks/useNbaData';
 import { useGameMatchupSummaryV2 } from '@/hooks/useGameMatchupSummaryV2';
+import { gameMatchupSummaryV2QueryKey } from '@/services/matchupSummaryV2QueryPolicy';
+import { resolveMatchupSummaryV2Availability } from '@/services/matchupSummaryV2Availability';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import {
   MatchupV2KeyMatchups,
@@ -455,9 +457,27 @@ function GameStoryView({
     enabled: matchupV2SummaryEnabled && !!gameId,
     status,
   });
-  const summary = summaryQuery.data;
-  const isV2InitialLoading = matchupV2SummaryEnabled && !!gameId && summaryQuery.isPending;
-  const isV2LayoutActive = isV2InitialLoading || summary !== undefined;
+  const matchupV2Availability = useMemo(() => resolveMatchupSummaryV2Availability({
+    featureEnabled: matchupV2SummaryEnabled,
+    gameId: gameId ?? '',
+    isPending: summaryQuery.isPending,
+    isFetching: summaryQuery.isFetching,
+    isError: summaryQuery.isError,
+    data: summaryQuery.data,
+    error: summaryQuery.error,
+  }), [
+    gameId,
+    matchupV2SummaryEnabled,
+    summaryQuery.data,
+    summaryQuery.error,
+    summaryQuery.isError,
+    summaryQuery.isFetching,
+    summaryQuery.isPending,
+  ]);
+  const isV2LayoutActive = matchupV2Availability.state !== 'disabled';
+  const hasValidatedV2Summary = matchupV2Availability.state === 'ready'
+    || matchupV2Availability.state === 'empty';
+  const summary = hasValidatedV2Summary ? matchupV2Availability.summary : undefined;
   const [filmRoomSource, setFilmRoomSource] = useState<FilmRoomSelectionSource>('default');
   const [activeKeyMatchupPair, setActiveKeyMatchupPair] = useState<{
     offensePlayerId: string;
@@ -471,6 +491,28 @@ function GameStoryView({
     setActiveKeyMatchupPair(null);
     setFilmRoomSelectionRequest(undefined);
   }, [gameId, matchupV2SummaryEnabled]);
+
+  React.useEffect(() => {
+    if (!__DEV__) return;
+    const error = 'error' in matchupV2Availability ? matchupV2Availability.error : null;
+    console.log('[MatchupSummaryV2] availability resolved', {
+      gameId: gameId ?? null,
+      queryKey: gameMatchupSummaryV2QueryKey(gameId ?? ''),
+      state: matchupV2Availability.state,
+      failureCategory: error?.category ?? null,
+      httpStatus: error?.httpStatus ?? null,
+      sourceStatus: error?.sourceStatus ?? null,
+      errorCategory: error?.errorCategory ?? null,
+      contractRelease: error?.contractRelease ?? summary?.contractRelease ?? null,
+      schemaVersion: error?.schemaVersion ?? summary?.schemaVersion ?? null,
+      validationPath: error?.validationPath ?? null,
+      validationReason: error?.validationReason ?? null,
+      failureCount: summaryQuery.failureCount,
+      retainedValidatedData: (matchupV2Availability.state === 'ready'
+        || matchupV2Availability.state === 'empty')
+        && matchupV2Availability.isRetainingCachedDataAfterError,
+    });
+  }, [gameId, matchupV2Availability, summary, summaryQuery.failureCount]);
 
   const handleLoadKeyMatchup = useCallback((selection: MatchupV2PairSelection) => {
     selectionRequestIdRef.current += 1;
@@ -596,25 +638,7 @@ function GameStoryView({
         </>
       )}
 
-      {isV2LayoutActive ? (
-        <>
-          <MatchupV2KeyMatchups
-            keyMatchups={summary?.keyMatchups ?? []}
-            homeTeam={homeTeam}
-            awayTeam={awayTeam}
-            isLoading={isV2InitialLoading}
-            activePair={filmRoomSource === 'keyMatchup' ? activeKeyMatchupPair : null}
-            onLoadPair={handleLoadKeyMatchup}
-          />
-          {summary ? (
-            <MatchupV2WhoGuarded
-              gameId={gameId ?? ''}
-              status={status}
-              summary={summary}
-            />
-          ) : null}
-        </>
-      ) : (
+      {matchupV2Availability.state === 'disabled' ? (
         <>
           {drivers.length > 0 && (
             <>
@@ -646,6 +670,39 @@ function GameStoryView({
             </>
           )}
         </>
+      ) : matchupV2Availability.state === 'loading' ? (
+        <MatchupV2KeyMatchups
+          keyMatchups={[]}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          isLoading
+          activePair={null}
+          onLoadPair={handleLoadKeyMatchup}
+        />
+      ) : matchupV2Availability.state === 'ready' || matchupV2Availability.state === 'empty' ? (
+        <>
+          <MatchupV2KeyMatchups
+            keyMatchups={matchupV2Availability.summary.keyMatchups}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            isLoading={false}
+            activePair={filmRoomSource === 'keyMatchup' ? activeKeyMatchupPair : null}
+            onLoadPair={handleLoadKeyMatchup}
+          />
+          <MatchupV2WhoGuarded
+            key={gameId ?? 'missing-game'}
+            gameId={gameId ?? ''}
+            status={status}
+            summary={matchupV2Availability.summary}
+          />
+        </>
+      ) : (
+        <MatchupV2AvailabilityState
+          state={matchupV2Availability.state}
+          onRetry={matchupV2Availability.state === 'transientError'
+            ? () => { void summaryQuery.refetch(); }
+            : undefined}
+        />
       )}
 
       <MatchupFilmRoom
@@ -655,11 +712,50 @@ function GameStoryView({
         homeBoxScore={homeBoxScore}
         awayBoxScore={awayBoxScore}
         gameId={gameId}
-        selectionRequest={isV2LayoutActive ? filmRoomSelectionRequest : undefined}
-        selectionSource={isV2LayoutActive ? filmRoomSource : 'default'}
+        selectionRequest={hasValidatedV2Summary ? filmRoomSelectionRequest : undefined}
+        selectionSource={hasValidatedV2Summary ? filmRoomSource : 'default'}
         onSelectionSourceChange={handleFilmRoomSourceChange}
         onExternalSelectionResolved={handleExternalSelectionResolved}
       />
+    </View>
+  );
+}
+
+function MatchupV2AvailabilityState({
+  state,
+  onRetry,
+}: {
+  state: 'transientError' | 'unsupported' | 'contractError';
+  onRetry?: () => void;
+}) {
+  const message = state === 'unsupported'
+    ? 'Detailed matchup tracking is unavailable for this game.'
+    : state === 'contractError'
+      ? 'Matchup 2.0 data could not be verified.'
+      : 'Detailed matchup tracking is temporarily unavailable.';
+  return (
+    <View testID={`matchup-v2-${state}`}>
+      <SectionHeader icon={<Info size={12} color={Colors.secondary} />} label="KEY MATCHUPS" />
+      <View style={styles.matchupV2StateCard}>
+        <Info size={15} color={Colors.textMuted} />
+        <View style={styles.matchupV2StateCopy}>
+          <Text style={styles.matchupV2StateTitle}>Matchup 2.0</Text>
+          <Text style={styles.emptyText}>{message}</Text>
+        </View>
+        {onRetry ? (
+          <TouchableOpacity
+            onPress={onRetry}
+            style={styles.matchupV2RetryButton}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel="Retry Matchup 2.0"
+            testID="matchup-v2-retry"
+          >
+            <RotateCcw size={13} color={Colors.secondary} />
+            <Text style={styles.matchupV2RetryText}>Retry</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1534,6 +1630,40 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: FontSize.sm,
     flex: 1,
+  },
+  matchupV2StateCard: {
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.cardBg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    padding: Spacing.md,
+  },
+  matchupV2StateCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  matchupV2StateTitle: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+  },
+  matchupV2RetryButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.secondaryMuted,
+    paddingHorizontal: Spacing.md,
+  },
+  matchupV2RetryText: {
+    color: Colors.secondary,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
   },
   comparisonCard: {
     backgroundColor: Colors.cardBg,
