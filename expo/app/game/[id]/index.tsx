@@ -37,9 +37,15 @@ import { useFeedbackContext } from '@/providers/FeedbackProvider';
 import { safeBack } from '@/utils/navigation';
 import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import { getContextTagStyle } from '@/utils/contextTagStyles';
+import {
+  clearGameObservabilityContext,
+  setGameObservabilityContext,
+} from '@/services/observability';
+import type { GameObservabilityTab } from '@/services/observability';
 
 const TABS = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
 const TAB_NAMES = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
+const GAME_OBSERVABILITY_TABS: GameObservabilityTab[] = ['summary', 'matchup', 'pbp', 'shots', 'analytics'];
 
 type SummaryStatRow = {
   label: string;
@@ -94,6 +100,12 @@ export default function GameDetailScreen() {
   const [summaryTeamTab, setSummaryTeamTab] = useState(2);
 
   const [analyticsSubTab, setAnalyticsSubTab] = useState(0);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    setGameObservabilityContext(id, GAME_OBSERVABILITY_TABS[activeTab] ?? 'summary');
+    return () => clearGameObservabilityContext(id);
+  }, [activeTab, id]);
 
   const queryClient = useQueryClient();
   const cachedGame = useMemo<Game | undefined>(() => {

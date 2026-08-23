@@ -19,6 +19,12 @@ import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import { versionString, APP_VERSION, APP_COMPONENTS } from '@/constants/versionManifest';
 import { useFeatureFlags, StabilityChannel } from '@/providers/FeatureFlagsProvider';
 import { useSnapshots } from '@/providers/SnapshotProvider';
+import {
+  getObservabilityDiagnostics,
+  sendSentryDiagnosticException,
+  sendSentryDiagnosticMessage,
+} from '@/services/observability';
+import type { DiagnosticEventResult } from '@/services/observability';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -36,6 +42,9 @@ export default function DevToolsPanel({ visible, onClose }: DevToolsPanelProps) 
   const [newSnapDesc, setNewSnapDesc] = useState<string>('');
   const [showCreateSnap, setShowCreateSnap] = useState<boolean>(false);
   const [expandedSnap, setExpandedSnap] = useState<string | null>(null);
+  const [sentrySending, setSentrySending] = useState<'message' | 'exception' | null>(null);
+  const [sentryResult, setSentryResult] = useState<DiagnosticEventResult | null>(null);
+  const observability = getObservabilityDiagnostics();
 
   const {
     isEnabled,
@@ -73,6 +82,16 @@ export default function DevToolsPanel({ visible, onClose }: DevToolsPanelProps) 
   const handleRestoreSnapshot = useCallback(async (id: string) => {
     await restoreSnapshot(id);
   }, [restoreSnapshot]);
+
+  const handleSentryDiagnostic = useCallback(async (kind: 'message' | 'exception') => {
+    setSentrySending(kind);
+    setSentryResult(null);
+    const result = kind === 'message'
+      ? await sendSentryDiagnosticMessage()
+      : await sendSentryDiagnosticException();
+    setSentryResult(result);
+    setSentrySending(null);
+  }, []);
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'flags', label: 'Flags', icon: <Flag size={14} color={activeTab === 'flags' ? Colors.primary : Colors.textMuted} /> },
@@ -323,6 +342,74 @@ export default function DevToolsPanel({ visible, onClose }: DevToolsPanelProps) 
           <Text style={styles.infoLabel}>Platform</Text>
           <Text style={styles.infoValue}>{Platform.OS}</Text>
         </View>
+      </View>
+
+      <View style={styles.infoSection}>
+        <Text style={styles.sectionTitle}>Sentry Diagnostics</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Status</Text>
+          <Text style={[styles.infoValue, { color: observability.isInitialized ? Colors.positive : Colors.warning }]}>
+            {observability.isInitialized
+              ? 'Configured'
+              : observability.isConfigured
+                ? 'Configuration error'
+                : 'Not configured'}
+          </Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Platform</Text>
+          <Text style={styles.infoValue}>{observability.platform}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Environment</Text>
+          <Text style={styles.infoValue}>{observability.environment}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>App / Build</Text>
+          <Text style={styles.infoValue}>{observability.appVersion} · {observability.buildIdentifier}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Release</Text>
+          <Text style={styles.infoValue} numberOfLines={1}>{observability.release}</Text>
+        </View>
+        {observability.initializationError ? (
+          <Text style={styles.diagnosticError}>{observability.initializationError}</Text>
+        ) : null}
+        <View style={styles.diagnosticActions}>
+          <TouchableOpacity
+            style={[styles.diagnosticButton, (!observability.isInitialized || sentrySending !== null) && styles.diagnosticButtonDisabled]}
+            onPress={() => void handleSentryDiagnostic('message')}
+            disabled={!observability.isInitialized || sentrySending !== null}
+          >
+            <Text style={styles.diagnosticButtonText}>
+              {sentrySending === 'message' ? 'Sending…' : 'Send Test Message'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.diagnosticButton, styles.diagnosticExceptionButton, (!observability.isInitialized || sentrySending !== null) && styles.diagnosticButtonDisabled]}
+            onPress={() => void handleSentryDiagnostic('exception')}
+            disabled={!observability.isInitialized || sentrySending !== null}
+          >
+            <Text style={styles.diagnosticButtonText}>
+              {sentrySending === 'exception' ? 'Sending…' : 'Send Test Exception'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {!observability.isConfigured ? (
+          <Text style={styles.diagnosticHint}>Set EXPO_PUBLIC_SENTRY_DSN to enable runtime diagnostics.</Text>
+        ) : null}
+        {sentryResult ? (
+          <View style={styles.diagnosticResult}>
+            <Text style={sentryResult.ok ? styles.diagnosticSuccess : styles.diagnosticError}>
+              {sentryResult.ok
+                ? `SDK accepted event${sentryResult.flushed ? ' and flushed the queue' : ''}.`
+                : sentryResult.error ?? 'Diagnostic failed.'}
+            </Text>
+            {sentryResult.eventId ? (
+              <Text style={styles.diagnosticEventId} selectable>Event ID: {sentryResult.eventId}</Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.infoSection}>
@@ -798,6 +885,59 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.positive,
     paddingVertical: 2,
+  },
+  diagnosticActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  diagnosticButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primary,
+  },
+  diagnosticExceptionButton: {
+    backgroundColor: Colors.negative,
+  },
+  diagnosticButtonDisabled: {
+    opacity: 0.4,
+  },
+  diagnosticButtonText: {
+    fontSize: FontSize.xs,
+    color: Colors.white,
+    fontWeight: FontWeight.semibold,
+    textAlign: 'center',
+  },
+  diagnosticHint: {
+    marginTop: Spacing.sm,
+    fontSize: FontSize.xs,
+    lineHeight: 16,
+    color: Colors.textMuted,
+  },
+  diagnosticResult: {
+    marginTop: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.surface,
+  },
+  diagnosticSuccess: {
+    fontSize: FontSize.xs,
+    color: Colors.positive,
+  },
+  diagnosticError: {
+    marginTop: Spacing.sm,
+    fontSize: FontSize.xs,
+    color: Colors.negative,
+  },
+  diagnosticEventId: {
+    marginTop: 4,
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   snapshotNotice: {
     marginTop: Spacing.lg,

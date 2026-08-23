@@ -1,5 +1,6 @@
+import * as Sentry from "@sentry/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useNavigationContainerRef } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
@@ -10,7 +11,13 @@ import { SnapshotProvider } from "@/providers/SnapshotProvider";
 import { FeedbackProvider } from "@/providers/FeedbackProvider";
 import DevToolsFAB from "@/components/DevToolsFAB";
 import FeedbackSheet from "@/components/FeedbackSheet";
+import ObservabilityBridge from "@/components/ObservabilityBridge";
+import {
+  initializeObservability,
+  registerObservabilityNavigationContainer,
+} from "@/services/observability";
 
+initializeObservability();
 void SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
@@ -58,14 +65,18 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
+  const navigationContainerRef = useNavigationContainerRef();
+
   useEffect(() => {
+    registerObservabilityNavigationContainer(navigationContainerRef);
     void SplashScreen.hideAsync();
-  }, []);
+  }, [navigationContainerRef]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <FeatureFlagsProvider>
+        <ObservabilityBridge />
         <SnapshotProvider>
           <FeedbackProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
@@ -80,3 +91,5 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

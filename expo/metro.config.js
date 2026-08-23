@@ -1,6 +1,8 @@
-const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname, {
+  includeWebReplay: false,
+});
 
 module.exports = withRorkMetro(config);
