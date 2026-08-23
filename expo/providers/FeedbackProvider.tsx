@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation } from '@tanstack/react-query';
+import { usePathname } from 'expo-router';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
-import { buildFeedbackPayload, submitFeedback } from '@/services/feedback';
+import { submitFeedbackForm } from '@/services/feedback';
 import type {
   FeedbackContextSnapshot,
   FeedbackFormInput,
@@ -21,8 +22,10 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
   const [presetTitle, setPresetTitle] = useState<string>('');
   const [overrideContext, setOverrideContext] = useState<FeedbackContextSnapshot | null>(null);
   const activeContextRef = useRef<FeedbackContextSnapshot>({});
+  const submissionInFlightRef = useRef<boolean>(false);
 
   const { channel, resolved, overrides } = useFeatureFlags();
+  const pathname = usePathname();
 
   const setActiveContext = useCallback((ctx: FeedbackContextSnapshot) => {
     activeContextRef.current = ctx;
@@ -49,21 +52,27 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
     return {
       ...base,
       ...override,
+      route: override.route ?? base.route ?? pathname,
       filters: { ...(base.filters ?? {}), ...(override.filters ?? {}) },
       extra: { ...(base.extra ?? {}), ...(override.extra ?? {}) },
     };
-  }, [overrideContext]);
+  }, [overrideContext, pathname]);
 
   const submitMutation = useMutation({
     mutationFn: async (form: FeedbackFormInput) => {
-      const payload = buildFeedbackPayload({
-        form,
-        context: resolveContext(),
-        flags: { channel, resolved, overrides },
-      });
-      const result = await submitFeedback(payload);
-      if (!result.ok) throw new Error(result.error ?? 'Submission failed');
-      return { payload, pasteUrl: result.pasteUrl };
+      if (submissionInFlightRef.current) throw new Error('Feedback submission already in progress');
+      submissionInFlightRef.current = true;
+      try {
+        const result = await submitFeedbackForm({
+          form,
+          context: resolveContext(),
+          flags: { channel, resolved, overrides },
+        });
+        if (!result.ok) throw new Error(result.error.message);
+        return result;
+      } finally {
+        submissionInFlightRef.current = false;
+      }
     },
   });
 
@@ -82,6 +91,7 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
       isSuccess: submitMutation.isSuccess,
       isError: submitMutation.isError,
       error: submitMutation.error,
+      lastSubmission: submitMutation.data,
       reset: submitMutation.reset,
     }),
     [
@@ -98,6 +108,7 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
       submitMutation.isSuccess,
       submitMutation.isError,
       submitMutation.error,
+      submitMutation.data,
       submitMutation.reset,
     ]
   );
@@ -107,7 +118,8 @@ export function useFeedbackContext(snapshot: FeedbackContextSnapshot) {
   const { setActiveContext } = useFeedback();
   const serialized = JSON.stringify(snapshot);
   React.useEffect(() => {
-    setActiveContext(snapshot);
+    const stableSnapshot = JSON.parse(serialized) as FeedbackContextSnapshot;
+    setActiveContext(stableSnapshot);
     return () => {
       setActiveContext({});
     };

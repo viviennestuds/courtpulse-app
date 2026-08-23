@@ -9,6 +9,8 @@ import {
   scrubObservabilityValue,
 } from '@/utils/observabilityContext';
 import type { StabilityChannel } from '@/providers/FeatureFlagsProvider';
+import type { FeedbackContextSnapshot, FeedbackType } from '@/types/feedback';
+import { buildFeedbackSentryContext } from '@/utils/feedbackContract';
 
 export type GameObservabilityTab = 'summary' | 'matchup' | 'pbp' | 'shots' | 'analytics';
 
@@ -171,6 +173,16 @@ export function captureCourtPulseMessage(
     setSafeCaptureContext(scope, context);
     return Sentry.captureMessage(message, level);
   }) ?? null;
+}
+
+/** Creates a low-noise correlation message only for technical feedback categories. */
+export function captureFeedbackCorrelation(
+  category: FeedbackType,
+  context: FeedbackContextSnapshot,
+): string | null {
+  const safeContext = buildFeedbackSentryContext(category, context);
+  if (!safeContext) return null;
+  return captureCourtPulseMessage(`CourtPulse user feedback: ${category}`, 'info', safeContext);
 }
 
 /** Returns non-secret status information for the development DevTools panel. */

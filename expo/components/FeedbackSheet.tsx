@@ -32,6 +32,8 @@ export default function FeedbackSheet() {
     isSubmitting,
     isSuccess,
     isError,
+    error,
+    lastSubmission,
     reset,
   } = useFeedback();
 
@@ -53,6 +55,8 @@ export default function FeedbackSheet() {
       setExpected('');
       setActual('');
       setRepro('');
+      setTesterName('');
+      setTesterContact('');
       setValidationError('');
       reset();
     }
@@ -61,6 +65,7 @@ export default function FeedbackSheet() {
   const isBug = type === 'bug';
 
   const handleSubmit = useCallback(async () => {
+    if (isSubmitting) return;
     if (!title.trim()) {
       setValidationError('Please add a short title.');
       return;
@@ -84,7 +89,7 @@ export default function FeedbackSheet() {
     } catch (e) {
       console.warn('[FeedbackSheet] submit failed', e);
     }
-  }, [type, title, description, expected, actual, repro, testerName, testerContact, submitAsync]);
+  }, [isSubmitting, type, title, description, expected, actual, repro, testerName, testerContact, submitAsync]);
 
   const handleDone = useCallback(() => {
     closeFeedback();
@@ -92,19 +97,27 @@ export default function FeedbackSheet() {
 
   const displayError = useMemo(() => {
     if (validationError) return validationError;
-    if (isError) return 'Could not send feedback. Please try again.';
+    if (isError) {
+      return __DEV__ && error instanceof Error
+        ? error.message
+        : 'Feedback could not be sent. Please try again.';
+    }
     return '';
-  }, [validationError, isError]);
+  }, [validationError, isError, error]);
+
+  const handleRequestClose = useCallback(() => {
+    if (!isSubmitting) closeFeedback();
+  }, [closeFeedback, isSubmitting]);
 
   return (
     <Modal
       visible={isOpen}
       animationType="slide"
       transparent
-      onRequestClose={closeFeedback}
+      onRequestClose={handleRequestClose}
     >
       <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeFeedback} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleRequestClose} disabled={isSubmitting} />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[styles.kbWrap, modalSheetStyle]}
@@ -119,7 +132,13 @@ export default function FeedbackSheet() {
                 <MessageSquare size={18} color={Colors.primary} />
                 <Text style={styles.headerTitle}>Send Feedback</Text>
               </View>
-              <TouchableOpacity onPress={closeFeedback} hitSlop={10} testID="feedback-close">
+              <TouchableOpacity
+                onPress={handleRequestClose}
+                hitSlop={10}
+                testID="feedback-close"
+                disabled={isSubmitting}
+                style={isSubmitting ? styles.closeDisabled : undefined}
+              >
                 <X size={20} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -131,8 +150,11 @@ export default function FeedbackSheet() {
                 </View>
                 <Text style={styles.successTitle}>Feedback sent</Text>
                 <Text style={styles.successSubtitle}>
-                  Your report was submitted. The CourtPulse team will take a look.
+                  Your report was saved. The CourtPulse team will take a look.
                 </Text>
+                {lastSubmission?.feedbackReference ? (
+                  <Text style={styles.feedbackReference}>{lastSubmission.feedbackReference}</Text>
+                ) : null}
                 <TouchableOpacity style={styles.primaryBtn} onPress={handleDone} testID="feedback-done">
                   <Text style={styles.primaryBtnText}>Done</Text>
                 </TouchableOpacity>
@@ -331,6 +353,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  closeDisabled: {
+    opacity: 0.45,
+  },
   headerTitle: {
     color: Colors.textPrimary,
     fontSize: FontSize.xl,
@@ -464,5 +489,11 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     textAlign: 'center',
     paddingHorizontal: Spacing.lg,
+  },
+  feedbackReference: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    letterSpacing: 0.8,
   },
 });

@@ -1,13 +1,12 @@
 """Feedback submission endpoint.
 
-Temporary CourtPulse feedback pipeline:
-  client -> POST /api/feedback
-         -> backend formats body as markdown
-         -> backend POSTs raw text to https://paste.rs/
-         -> backend sends a brrr.now notification with open_url=pasteUrl
+Deprecated CourtPulse feedback transport retained for reference only.
 
-The brrr.now URL and bearer token MUST stay server-side. Treat paste.rs
-content as public; sensitive fields are redacted before posting.
+The Expo client no longer routes submissions here because paste.rs is not durable
+private storage. Production feedback must use the Supabase submit-feedback Edge
+Function and feedback_reports table. Do not configure EXPO_PUBLIC_FEEDBACK_ENDPOINT
+to this route. The brrr helpers remain solely as a reference for best-effort
+notification behavior until the Edge Function is deployed.
 """
 from __future__ import annotations
 
