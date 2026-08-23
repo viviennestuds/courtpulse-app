@@ -7,6 +7,7 @@ import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import SegmentControl from '@/components/SegmentControl';
 import DataSourceBadge from '@/components/DataSourceBadge';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import { useTeams } from '@/hooks/useNbaData';
 import { Team } from '@/types';
 import { TEAM_STANDINGS_SEASON } from '@/services/nbaStats';
@@ -99,6 +100,7 @@ export default function TeamsScreen() {
   const insets = useSafeAreaInsets();
   const [conf, setConf] = useState<number>(0);
   const [sortBy, setSortBy] = useState<TeamSortKey>('record');
+  const { frameStyle } = useResponsiveLayout();
 
   const { teams: rawTeams, teamsOverview, dataSource, dataState, isLoading, isRefetching, refetch, error } = useTeams();
 
@@ -137,7 +139,7 @@ export default function TeamsScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}> 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, frameStyle]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={Colors.primary} />}
       >
@@ -155,7 +157,7 @@ export default function TeamsScreen() {
         </View>
 
         <View style={styles.segmentRow}>
-          <SegmentControl segments={CONF_SEGMENTS} selected={conf} onSelect={setConf} />
+          <SegmentControl segments={CONF_SEGMENTS} selected={conf} onSelect={setConf} semantics="selection" />
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortRow} contentContainerStyle={styles.sortRowContent}>
@@ -187,7 +189,16 @@ export default function TeamsScreen() {
           <View style={styles.emptyState}>
             <AlertCircle size={22} color={Colors.warning} />
             <Text style={styles.emptyTitle}>Teams unavailable</Text>
-            <Text style={styles.emptyText}>{error instanceof Error ? error.message : 'Please pull to refresh and try again.'}</Text>
+            <Text style={styles.emptyText}>{error instanceof Error ? error.message : 'Please try again.'}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRefresh}
+              disabled={isRefetching}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading teams"
+            >
+              <Text style={styles.retryButtonText}>{isRefetching ? 'Retrying…' : 'Retry'}</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -351,6 +362,20 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: FontSize.sm,
     textAlign: 'center',
+  },
+  retryButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  retryButtonText: {
+    color: Colors.primary,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
   },
   teamRow: {
     flexDirection: 'row',

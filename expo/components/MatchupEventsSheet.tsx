@@ -15,6 +15,7 @@ import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useGameMatchupEventsV2 } from '@/hooks/useGameMatchupEventsV2';
 import type { MatchupSummaryV2GameStatus } from '@/hooks/useGameMatchupSummaryV2';
 import { parsePTClock } from '@/services/nbaApi';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import type {
   MatchupEventsV2Action,
   MatchupEventsV2Event,
@@ -312,6 +313,7 @@ export default React.memo(function MatchupEventsSheet({
   onClose,
 }: MatchupEventsSheetProps) {
   const insets = useSafeAreaInsets();
+  const { modalSheetStyle } = useResponsiveLayout();
   const [filter, setFilter] = useState<MatchupEventsFilter>('all');
   const pairKey = pair ? `${pair.gameId}:${pair.offensePlayerId}:${pair.defensePlayerId}` : '';
 
@@ -352,7 +354,7 @@ export default React.memo(function MatchupEventsSheet({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay} testID="matchup-v2-events-sheet">
         <Pressable style={styles.backdropDismiss} onPress={onClose} accessibilityLabel="Dismiss matchup events" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        <View style={[styles.sheet, modalSheetStyle, { paddingBottom: insets.bottom + Spacing.lg }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <View style={styles.headerCopy}>

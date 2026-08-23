@@ -9,6 +9,7 @@ import { useGameDetail } from '@/hooks/useNbaData';
 import { computePlayerPerformanceStats } from '@/services/analyticsEngine';
 import { PlayerPerformanceStats } from '@/types';
 import { safeBack } from '@/utils/navigation';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 
 function StatCell({ label, value, color, large }: {
   label: string;
@@ -147,6 +148,7 @@ export default function PlayerPerformanceScreen() {
   const { id, playerId } = useLocalSearchParams<{ id: string; playerId: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { frameStyle } = useResponsiveLayout();
 
   const {
     game,
@@ -192,7 +194,7 @@ export default function PlayerPerformanceScreen() {
   if (isLoading) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, frameStyle]}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ChevronLeft size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -209,7 +211,7 @@ export default function PlayerPerformanceScreen() {
   if (isError || !game || !playerStats) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, frameStyle]}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ChevronLeft size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -229,7 +231,7 @@ export default function PlayerPerformanceScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, frameStyle]}>
         <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <ChevronLeft size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
@@ -241,7 +243,7 @@ export default function PlayerPerformanceScreen() {
 
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, frameStyle]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.playerHeader}>

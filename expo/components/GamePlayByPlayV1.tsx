@@ -6,6 +6,7 @@ import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import DataSourceBadge from '@/components/DataSourceBadge';
 import FilterChip from '@/components/FilterChip';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import type { DataSource } from '@/services/dataProvider';
 import type { Game, PlayByPlayEvent } from '@/types';
@@ -351,6 +352,7 @@ function PbpPlayerSheet({
 }) {
   const [search, setSearch] = useState<string>('');
   const insets = useSafeAreaInsets();
+  const { modalSheetStyle } = useResponsiveLayout();
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -362,7 +364,7 @@ function PbpPlayerSheet({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.sheetOverlay}>
         <Pressable style={styles.sheetDismiss} onPress={onClose} />
-        <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + Spacing.md }]}> 
+        <View style={[styles.sheetContainer, modalSheetStyle, { paddingBottom: insets.bottom + Spacing.md }]}>
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Filter PBP by Player</Text>

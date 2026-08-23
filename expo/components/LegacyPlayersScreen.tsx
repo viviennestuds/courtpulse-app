@@ -73,7 +73,7 @@ export default function LegacyPlayersScreen() {
         </View>
 
         <View style={styles.segmentRow}>
-          <SegmentControl segments={SORT_SEGMENTS} selected={sortIndex} onSelect={setSortIndex} />
+          <SegmentControl segments={SORT_SEGMENTS} selected={sortIndex} onSelect={setSortIndex} semantics="selection" />
         </View>
 
         {isLoading && (

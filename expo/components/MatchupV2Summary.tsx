@@ -26,6 +26,7 @@ import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useGameMatchupSummaryV2, MatchupSummaryV2GameStatus } from '@/hooks/useGameMatchupSummaryV2';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import MatchupEventsSheet, { MatchupEventsPairSnapshot } from '@/components/MatchupEventsSheet';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import type {
   GameMatchupSummaryV2Response,
   MatchupSummaryV2DefenderDistributionRow,
@@ -427,6 +428,8 @@ function MatchupV2PlayerPicker({
   onSelect: (playerId: string) => void;
   onClose: () => void;
 }) {
+  const { modalSheetStyle } = useResponsiveLayout();
+
   return (
     <Modal
       visible={visible}
@@ -435,7 +438,7 @@ function MatchupV2PlayerPicker({
       onRequestClose={onClose}
     >
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <Pressable style={[styles.modalSheet, modalSheetStyle]} onPress={() => {}}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Offensive player</Text>

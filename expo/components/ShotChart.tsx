@@ -5,12 +5,14 @@ import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize } from '@/constants/theme';
 import { CanonicalShotEvent } from '@/analytics/shots';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useMeasuredContentWidth } from '@/components/ResponsiveLayout';
+import { getMeasuredChartGeometry } from '@/utils/responsiveLayout';
 
 interface ShotChartProps {
   shots: CanonicalShotEvent[];
-  width: number;
   onShotPress?: (shot: CanonicalShotEvent) => void;
   selectedShotId?: string | null;
+  freeThrowOverlay?: React.ReactNode;
 }
 
 interface ChartPoint {
@@ -82,9 +84,11 @@ function mapShotToCourtV2SvgPoint(shot: CanonicalShotEvent): ChartPoint {
 function mapShotToLegacyHitPoint(shot: CanonicalShotEvent, width: number, svgHeight: number): ChartPoint {
   const x = typeof shot.x === 'number' ? clampUnit(shot.x) : 0.5;
   const y = typeof shot.y === 'number' ? clampUnit(shot.y) : 0;
+  const horizontalScale = width / COURT_VIEWBOX.width;
+  const verticalScale = svgHeight / COURT_VIEWBOX.height;
   return {
-    cx: x * (width - 60) + 30 * (width / COURT_VIEWBOX.width),
-    cy: y * (svgHeight * 420 / COURT_VIEWBOX.height) + 10 * (svgHeight / COURT_VIEWBOX.height),
+    cx: (x * 440 + 30) * horizontalScale,
+    cy: (y * 420 + 10) * verticalScale,
   };
 }
 
@@ -178,11 +182,15 @@ function CourtGeometryV2() {
   );
 }
 
-export default React.memo(function ShotChart({ shots, width, onShotPress, selectedShotId }: ShotChartProps) {
+export default React.memo(function ShotChart({ shots, onShotPress, selectedShotId, freeThrowOverlay }: ShotChartProps) {
   const enableCourtGeometryV2 = useFeatureFlag('enableShotChartCourtGeometryV2');
+  const { width, onLayout } = useMeasuredContentWidth();
   const chartViewBox = enableCourtGeometryV2 ? COURT_V2_VIEWBOX : COURT_VIEWBOX;
+  const freeThrowViewBoxY = enableCourtGeometryV2 ? COURT_V2_ORIGIN.y + COURT_V2.paintDepth : 190;
+  const geometry = getMeasuredChartGeometry(width, chartViewBox.width, chartViewBox.height, freeThrowViewBoxY);
   const svgScale = width / chartViewBox.width;
-  const svgHeight = chartViewBox.height * svgScale;
+  const svgHeight = geometry.height;
+  const freeThrowCenterY = geometry.freeThrowCenterY;
 
   const plottableShots = useMemo(() => {
     return shots.filter(s => s.x != null && s.y != null);
@@ -210,7 +218,8 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
   }, [onShotPress]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={onLayout}>
+      {width > 0 ? (
       <View style={[styles.courtContainer, { width, height: svgHeight }]}>
         <Svg width={width} height={svgHeight} viewBox={`0 0 ${chartViewBox.width} ${chartViewBox.height}`}>
           {enableCourtGeometryV2 ? <CourtGeometryV2 /> : <LegacyCourtGeometry />}
@@ -268,7 +277,13 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
             })}
           </View>
         )}
+        {freeThrowOverlay ? (
+          <View pointerEvents="box-none" style={[styles.freeThrowOverlay, { top: freeThrowCenterY - 14 }]}>
+            {freeThrowOverlay}
+          </View>
+        ) : null}
       </View>
+      ) : null}
       {plottableShots.length === 0 && shots.length > 0 && (
         <Text style={styles.noCoordText}>Shot coordinates not available for chart rendering</Text>
       )}
@@ -278,12 +293,19 @@ export default React.memo(function ShotChart({ shots, width, onShotPress, select
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
     gap: Spacing.md,
   },
   courtContainer: {
     alignItems: 'center',
     borderRadius: BorderRadius.md,
     overflow: 'hidden',
+  },
+  freeThrowOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   noCoordText: {
     color: Colors.textMuted,

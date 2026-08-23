@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 
@@ -7,38 +7,44 @@ interface SegmentControlProps {
   segments: string[];
   selected: number;
   onSelect: (index: number) => void;
+  semantics?: 'tabs' | 'selection';
 }
 
-export default React.memo(function SegmentControl({ segments, selected, onSelect }: SegmentControlProps) {
-  const animatedValue = useRef(new Animated.Value(selected)).current;
-
-  useEffect(() => {
-    Animated.spring(animatedValue, {
-      toValue: selected,
-      useNativeDriver: false,
-      speed: 20,
-      bounciness: 0,
-    }).start();
-  }, [selected, animatedValue]);
+export default React.memo(function SegmentControl({ segments, selected, onSelect, semantics = 'tabs' }: SegmentControlProps) {
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   const handlePress = useCallback((index: number) => {
     onSelect(index);
   }, [onSelect]);
 
   return (
-    <View style={styles.container}>
-      {segments.map((seg, i) => (
-        <TouchableOpacity
-          key={i}
-          style={[styles.segment, selected === i && styles.segmentActive]}
-          onPress={() => handlePress(i)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.segmentText, selected === i && styles.segmentTextActive]}>
-            {seg}
-          </Text>
-        </TouchableOpacity>
-      ))}
+    <View style={styles.container} accessibilityRole={semantics === 'tabs' ? 'tablist' : undefined}>
+      {segments.map((seg, i) => {
+        const isSelected = selected === i;
+        const isFocused = focusedIndex === i;
+        return (
+          <Pressable
+            key={seg}
+            style={({ pressed }: { pressed: boolean }) => [
+              styles.segment,
+              isSelected && styles.segmentActive,
+              isFocused && styles.segmentFocused,
+              pressed && styles.segmentPressed,
+            ]}
+            onPress={() => handlePress(i)}
+            onFocus={() => setFocusedIndex(i)}
+            onBlur={() => setFocusedIndex((current: number | null) => current === i ? null : current)}
+            focusable
+            accessibilityRole={semantics === 'tabs' ? 'tab' : 'button'}
+            accessibilityLabel={seg}
+            accessibilityState={{ selected: isSelected }}
+          >
+            <Text style={[styles.segmentText, isSelected && styles.segmentTextActive]}>
+              {seg}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 });
@@ -59,6 +65,13 @@ const styles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: Colors.primaryMuted,
+  },
+  segmentFocused: {
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  segmentPressed: {
+    opacity: 0.72,
   },
   segmentText: {
     color: Colors.textMuted,

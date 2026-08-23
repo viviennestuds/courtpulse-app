@@ -23,6 +23,7 @@ import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { usePlayersDirectory } from '@/hooks/usePlayersDirectory';
 import PlayerDirectoryRow from '@/components/PlayerDirectoryRow';
 import PlayersSelectionSheet, { PlayersSelectionOption } from '@/components/PlayersSelectionSheet';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import type { PlayerDirectoryEntry, PlayersSeasonPhase } from '@/types/playersDirectory';
 import {
   derivePlayersTeamOptions,
@@ -73,6 +74,7 @@ const FilterButton = React.memo(function FilterButton({
 export default function PlayersDirectoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { frameStyle } = useResponsiveLayout();
   const [season, setSeason] = useState<NbaSeasonId>(NBA_LATEST_SUPPORTED_DATA_SEASON);
   const [phase, setPhase] = useState<PlayersSeasonPhase>('regular');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -420,7 +422,7 @@ export default function PlayersDirectoryScreen() {
         keyExtractor={keyExtractor}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
-        contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, Spacing.lg) + Spacing.xxxl }]}
+        contentContainerStyle={[styles.listContent, frameStyle, { paddingBottom: Math.max(insets.bottom, Spacing.lg) + Spacing.xxxl }]}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"

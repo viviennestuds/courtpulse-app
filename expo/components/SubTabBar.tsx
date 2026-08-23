@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 
@@ -11,33 +11,35 @@ interface SubTabBarProps {
 }
 
 export default React.memo(function SubTabBar({ tabs, selected, onSelect, compact }: SubTabBarProps) {
-  const indicatorAnim = useRef(new Animated.Value(selected)).current;
-
-  useEffect(() => {
-    Animated.spring(indicatorAnim, {
-      toValue: selected,
-      useNativeDriver: false,
-      speed: 24,
-      bounciness: 0,
-    }).start();
-  }, [selected, indicatorAnim]);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   return (
-    <View style={[styles.container, compact && styles.containerCompact]}>
+    <View style={[styles.container, compact && styles.containerCompact]} accessibilityRole="tablist">
       {tabs.map((tab, i) => {
         const isActive = selected === i;
         return (
-          <TouchableOpacity
-            key={i}
-            style={[styles.tab, isActive && styles.tabActive, compact && styles.tabCompact]}
+          <Pressable
+            key={tab}
+            style={({ pressed }: { pressed: boolean }) => [
+              styles.tab,
+              isActive && styles.tabActive,
+              compact && styles.tabCompact,
+              focusedIndex === i && styles.tabFocused,
+              pressed && styles.tabPressed,
+            ]}
             onPress={() => onSelect(i)}
-            activeOpacity={0.7}
+            onFocus={() => setFocusedIndex(i)}
+            onBlur={() => setFocusedIndex((current: number | null) => current === i ? null : current)}
+            focusable
+            accessibilityRole="tab"
+            accessibilityLabel={tab}
+            accessibilityState={{ selected: isActive }}
           >
             <Text style={[styles.tabText, isActive && styles.tabTextActive, compact && styles.tabTextCompact]}>
               {tab}
             </Text>
             {isActive && <View style={styles.indicator} />}
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </View>
@@ -70,6 +72,13 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     backgroundColor: Colors.surfaceLight,
+  },
+  tabFocused: {
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  tabPressed: {
+    opacity: 0.72,
   },
   tabCompact: {
     backgroundColor: 'transparent',

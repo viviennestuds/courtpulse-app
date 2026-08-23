@@ -22,6 +22,7 @@ import {
   getSeasonTypeFromGameId,
 } from '@/utils/nbaGameSeason';
 import { buildMatchupGameDrivers } from '@/utils/matchupDrivers';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 
 interface TeamSide {
   id: string;
@@ -1346,6 +1347,8 @@ function OffensivePickerModal({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const { modalSheetStyle } = useResponsiveLayout();
+
   return (
     <Modal
       visible={visible}
@@ -1354,7 +1357,7 @@ function OffensivePickerModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <Pressable style={[styles.modalSheet, modalSheetStyle]} onPress={() => {}}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Offensive player</Text>
@@ -1412,6 +1415,8 @@ function DefenderPickerModal({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const { modalSheetStyle } = useResponsiveLayout();
+
   return (
     <Modal
       visible={visible}
@@ -1420,7 +1425,7 @@ function DefenderPickerModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <Pressable style={[styles.modalSheet, modalSheetStyle]} onPress={() => {}}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Defender</Text>

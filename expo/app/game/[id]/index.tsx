@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, ActivityIndicator, Modal, TextInput, Pressable, Animated } from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, WifiOff, Search, X, ChevronDown, ChevronUp, Users, Filter, Crosshair, Link2, Target } from 'lucide-react-native';
@@ -35,6 +35,7 @@ import OnCourtSummaryDetailSheet from '@/components/OnCourtSummaryDetailSheet';
 import FeedbackButton from '@/components/FeedbackButton';
 import { useFeedbackContext } from '@/providers/FeedbackProvider';
 import { safeBack } from '@/utils/navigation';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import { getContextTagStyle } from '@/utils/contextTagStyles';
 
 const TABS = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
@@ -87,7 +88,7 @@ export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { frameStyle } = useResponsiveLayout();
   const [activeTab, setActiveTab] = useState(0);
   const [pbpFilter, setPbpFilter] = useState('All');
   const [summaryTeamTab, setSummaryTeamTab] = useState(2);
@@ -194,7 +195,7 @@ export default function GameDetailScreen() {
   if (isLoading && !effectiveGame) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, frameStyle]}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ChevronLeft size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -213,7 +214,7 @@ export default function GameDetailScreen() {
     if (!effectiveGame) {
       return (
         <View style={[styles.screen, { paddingTop: insets.top }]}>
-          <View style={styles.headerBar}>
+          <View style={[styles.headerBar, frameStyle]}>
             <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <ChevronLeft size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
@@ -243,7 +244,7 @@ export default function GameDetailScreen() {
     const playoffMeta = formatPlayoffMeta(effectiveGame);
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, frameStyle]}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ChevronLeft size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -258,7 +259,7 @@ export default function GameDetailScreen() {
           />
         </View>
 
-        <View style={scheduledStyles.header}>
+        <View style={[scheduledStyles.header, frameStyle]}>
           <View style={scheduledStyles.teamCol}>
             <View style={[styles.teamColorBar, { backgroundColor: effectiveGame.awayTeam.primaryColor }]} />
             <Text style={scheduledStyles.teamAbbr}>{sAwayAbbr}</Text>
@@ -280,7 +281,7 @@ export default function GameDetailScreen() {
           </View>
         </View>
 
-        <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scrollArea} contentContainerStyle={[styles.scrollContent, frameStyle]} showsVerticalScrollIndicator={false}>
           {matchupRealDataEnabled ? (
             <MatchupRealDataTab
               homeTeam={effectiveGame.homeTeam}
@@ -312,7 +313,7 @@ export default function GameDetailScreen() {
   if (!game) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, frameStyle]}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ChevronLeft size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -340,7 +341,7 @@ export default function GameDetailScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, frameStyle]}>
         <TouchableOpacity onPress={handleBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <ChevronLeft size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
@@ -356,7 +357,7 @@ export default function GameDetailScreen() {
         />
       </View>
 
-      <View style={styles.scoreHeader}>
+      <View style={[styles.scoreHeader, frameStyle]}>
         <View style={styles.teamScoreCol}>
           <View style={[styles.teamColorBar, { backgroundColor: game.awayTeam.primaryColor }]} />
           <Text style={styles.teamScoreAbbr}>{awayAbbr}</Text>
@@ -380,11 +381,11 @@ export default function GameDetailScreen() {
         </View>
       </View>
 
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, frameStyle]}>
         <SegmentControl segments={TABS} selected={activeTab} onSelect={handleTabChange} />
       </View>
 
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollArea} contentContainerStyle={[styles.scrollContent, frameStyle]} showsVerticalScrollIndicator={false}>
         {activeTab === 0 && (
           <SummaryTab
             game={game}
@@ -471,7 +472,6 @@ export default function GameDetailScreen() {
             rawActions={rawActions}
             canonicalShots={canonicalShotEvents}
             gameId={id ?? ''}
-            screenWidth={screenWidth}
             pbpSource={pbpSource}
             homeTeamId={game.homeTeam.id}
             awayTeamId={game.awayTeam.id}
@@ -1306,11 +1306,10 @@ const shotDetailStyles = StyleSheet.create({
   },
 });
 
-function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, homeTeamId, awayTeamId, homeAbbr, awayAbbr, homeBoxScore, awayBoxScore }: {
+function ShotsTab({ rawActions, canonicalShots, gameId, pbpSource, homeTeamId, awayTeamId, homeAbbr, awayAbbr, homeBoxScore, awayBoxScore }: {
   rawActions: CdnPbpAction[];
   canonicalShots: CanonicalShotEvent[];
   gameId: string;
-  screenWidth: number;
   pbpSource: DataSource;
   homeTeamId: string;
   awayTeamId: string;
@@ -1680,24 +1679,22 @@ function ShotsTab({ rawActions, canonicalShots, gameId, screenWidth, pbpSource, 
       <View style={shotStyles.chartWrap}>
         <ShotChart
           shots={filteredShots}
-          width={screenWidth - 32}
           onShotPress={shotDetailEnabled ? handleShotPress : undefined}
           selectedShotId={selectedShot?.id ?? null}
+          freeThrowOverlay={freeThrowsEnabled && ftAggregate.summary.ftAttempted > 0 ? (
+            <TouchableOpacity
+              style={[shotStyles.ftBadgeOnCourt, isFtFocus && shotStyles.ftBadgeOnCourtActive]}
+              onPress={() => setFtAggregateVisible(true)}
+              activeOpacity={0.8}
+              testID="ft-chart-badge"
+              accessibilityRole="button"
+              accessibilityLabel="Free throws summary"
+            >
+              <Target size={11} color={isFtFocus ? Colors.background : Colors.secondary} />
+              <Text style={[shotStyles.ftBadgeLabel, isFtFocus && shotStyles.ftBadgeLabelActive]}>FT</Text>
+            </TouchableOpacity>
+          ) : undefined}
         />
-        {freeThrowsEnabled && ftAggregate.summary.ftAttempted > 0 && (
-          <View pointerEvents="box-none" style={[shotStyles.ftBadgeAnchor, { top: ((screenWidth - 32) * 0.94) * (190 / 470) - 14 }]}>
-          <TouchableOpacity
-            style={[shotStyles.ftBadgeOnCourt, isFtFocus && shotStyles.ftBadgeOnCourtActive]}
-            onPress={() => setFtAggregateVisible(true)}
-            activeOpacity={0.8}
-            testID="ft-chart-badge"
-            accessibilityLabel="Free throws summary"
-          >
-            <Target size={11} color={isFtFocus ? Colors.background : Colors.secondary} />
-            <Text style={[shotStyles.ftBadgeLabel, isFtFocus && shotStyles.ftBadgeLabelActive]}>FT</Text>
-          </TouchableOpacity>
-          </View>
-        )}
       </View>
 
       {allPlayers.length > 0 && (
@@ -2295,12 +2292,6 @@ const shotStyles = StyleSheet.create({
   chartWrap: {
     position: 'relative' as const,
     marginBottom: Spacing.md,
-  },
-  ftBadgeAnchor: {
-    position: 'absolute' as const,
-    left: 0,
-    right: 0,
-    alignItems: 'center' as const,
   },
   ftBadgeOnCourt: {
     flexDirection: 'row',

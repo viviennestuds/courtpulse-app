@@ -18,9 +18,11 @@ import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/providers/FeedbackProvider';
 import { FEEDBACK_TYPE_OPTIONS, FeedbackType } from '@/types/feedback';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 
 export default function FeedbackSheet() {
   const insets = useSafeAreaInsets();
+  const { modalSheetStyle } = useResponsiveLayout();
   const {
     isOpen,
     presetType,
@@ -105,7 +107,7 @@ export default function FeedbackSheet() {
         <Pressable style={StyleSheet.absoluteFill} onPress={closeFeedback} />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.kbWrap}
+          style={[styles.kbWrap, modalSheetStyle]}
         >
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
             <View style={styles.grabberWrap}>

@@ -1,9 +1,10 @@
 import React, { useCallback } from 'react';
-import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 
 export interface PlayersSelectionOption {
   value: string;
@@ -31,6 +32,7 @@ function PlayersSelectionSheetImpl({
   testID,
 }: PlayersSelectionSheetProps) {
   const insets = useSafeAreaInsets();
+  const { modalSheetStyle } = useResponsiveLayout();
 
   const renderOption = useCallback(({ item }: { item: PlayersSelectionOption }) => {
     const isSelected = item.value === selectedValue;
@@ -61,7 +63,7 @@ function PlayersSelectionSheetImpl({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} testID={testID}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}
+          style={[styles.sheet, modalSheetStyle, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}
           onPress={() => undefined}
         >
           <View style={styles.handle} />
@@ -108,7 +110,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.glassBorder,
     paddingTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    ...(Platform.OS === 'web' ? { width: '100%' as const, alignSelf: 'center' as const, maxWidth: 560 } : null),
   },
   handle: {
     width: 42,

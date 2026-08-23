@@ -11,6 +11,7 @@ import { useTeamRoster, useTeams } from '@/hooks/useNbaData';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { PlayerOverview, Team, TeamRecordSplits, TeamRosterPlayer } from '@/types';
 import { safeBack } from '@/utils/navigation';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import {
   formatClinchIndicator,
   formatGamesBack,
@@ -238,6 +239,7 @@ export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { frameStyle } = useResponsiveLayout();
   const [activeTab, setActiveTab] = useState<number>(0);
   const isRosterHydrationEnabled = useFeatureFlag(TEAMS_ROSTER_FLAG);
 
@@ -283,7 +285,7 @@ export default function TeamDetailScreen() {
   if (!team) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}> 
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, frameStyle]}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
             <ChevronLeft size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -301,7 +303,7 @@ export default function TeamDetailScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}> 
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, frameStyle]}>
         <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <ChevronLeft size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
@@ -310,7 +312,7 @@ export default function TeamDetailScreen() {
         </View>
       </View>
 
-      <View style={styles.teamHeader}>
+      <View style={[styles.teamHeader, frameStyle]}>
         <View style={[styles.teamColorAccent, { backgroundColor: team.primaryColor }]} />
         <View style={styles.teamHeaderInfo}>
           <Text style={styles.teamCity}>{team.city}</Text>
@@ -326,18 +328,18 @@ export default function TeamDetailScreen() {
         </View>
       </View>
 
-      <View style={styles.quickStats}>
+      <View style={[styles.quickStats, frameStyle]}>
         <MetricTile label="OFF RTG" value={formatRating(ratings?.offRating)} />
         <MetricTile label="DEF RTG" value={formatRating(ratings?.defRating)} />
         <MetricTile label="NET RTG" value={formatRating(ratings?.netRating, true)} valueColor={metricColor(ratings?.netRating)} />
         <MetricTile label="PACE" value={formatRating(ratings?.pace)} />
       </View>
 
-      <View style={styles.tabRow}>
+      <View style={[styles.tabRow, frameStyle]}>
         <SegmentControl segments={TEAM_TABS} selected={activeTab} onSelect={setActiveTab} />
       </View>
 
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollArea} contentContainerStyle={[styles.scrollContent, frameStyle]} showsVerticalScrollIndicator={false}>
         {activeTab === 0 && (
           <View>
             <View style={styles.sourceCallout}>

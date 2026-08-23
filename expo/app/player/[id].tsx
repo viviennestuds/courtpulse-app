@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
@@ -21,7 +21,6 @@ export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -162,7 +161,7 @@ export default function PlayerDetailScreen() {
             <DataSourceBadge source="demo" />
             <Text style={styles.sectionLabel}>SHOT CHART</Text>
             <Text style={{ color: Colors.textMuted, fontSize: 12, marginBottom: 8 }}>Sample shot data shown below</Text>
-            <ShotChart shots={playerShots} width={screenWidth - 32} />
+            <ShotChart shots={playerShots} />
           </View>
         )}
 

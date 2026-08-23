@@ -12,6 +12,7 @@ import DateRail from '@/components/DateRail';
 import SegmentControl from '@/components/SegmentControl';
 import CalendarModal from '@/components/CalendarModal';
 import FeedbackButton from '@/components/FeedbackButton';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import { useFeedbackContext } from '@/providers/FeedbackProvider';
 import { useScoreboard, useScoreboardByDate } from '@/hooks/useNbaData';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
@@ -61,6 +62,7 @@ interface DateDrivenProps {
 
 function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate, calendarModalEnabled, sourceBadgesEnabled, playoffBracketEnabled }: DateDrivenProps) {
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
+  const { frameStyle } = useResponsiveLayout();
   useFeedbackContext({ screen: 'Games', filters: { selectedDate } });
   const {
     games,
@@ -101,7 +103,7 @@ function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate,
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, frameStyle]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={Colors.primary} />}
       >
@@ -156,7 +158,16 @@ function DateDrivenGames({ insets, router, today, selectedDate, setSelectedDate,
         {isError && (
           <View style={styles.errorBanner}>
             <WifiOff size={16} color={Colors.warning} />
-            <Text style={styles.errorBannerText}>Unable to reach NBA servers. Pull to retry.</Text>
+            <Text style={styles.errorBannerText}>Unable to reach NBA servers.</Text>
+            <TouchableOpacity
+              style={styles.errorRetryButton}
+              onPress={handleRefresh}
+              disabled={isRefetching}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading games"
+            >
+              <Text style={styles.errorRetryText}>{isRefetching ? 'Retrying…' : 'Retry'}</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -259,6 +270,7 @@ interface LegacyProps {
 
 function LegacyGames({ insets, router, sourceBadgesEnabled, playoffBracketEnabled }: LegacyProps) {
   const [segment, setSegment] = useState(0);
+  const { frameStyle } = useResponsiveLayout();
   const {
     todayGames,
     recentGames,
@@ -300,7 +312,7 @@ function LegacyGames({ insets, router, sourceBadgesEnabled, playoffBracketEnable
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, frameStyle]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={Colors.primary} />}
       >
@@ -327,7 +339,16 @@ function LegacyGames({ insets, router, sourceBadgesEnabled, playoffBracketEnable
         {isError && (
           <View style={styles.errorBanner}>
             <WifiOff size={16} color={Colors.warning} />
-            <Text style={styles.errorBannerText}>Unable to reach NBA servers. Pull to retry.</Text>
+            <Text style={styles.errorBannerText}>Unable to reach NBA servers.</Text>
+            <TouchableOpacity
+              style={styles.errorRetryButton}
+              onPress={() => void refetch()}
+              disabled={isRefetching}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading games"
+            >
+              <Text style={styles.errorRetryText}>{isRefetching ? 'Retrying…' : 'Retry'}</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -348,7 +369,7 @@ function LegacyGames({ insets, router, sourceBadgesEnabled, playoffBracketEnable
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Scoreboard</Text>
-          <SegmentControl segments={LEGACY_SEGMENTS} selected={segment} onSelect={setSegment} />
+          <SegmentControl segments={LEGACY_SEGMENTS} selected={segment} onSelect={setSegment} semantics="selection" />
         </View>
 
         {liveInView.length > 0 && (
@@ -495,6 +516,19 @@ const styles = StyleSheet.create({
     color: Colors.warning,
     fontSize: FontSize.sm,
     flex: 1,
+  },
+  errorRetryButton: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+  },
+  errorRetryText: {
+    color: Colors.warning,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
   },
   loadingContainer: {
     alignItems: 'center',
