@@ -179,8 +179,9 @@ export function captureCourtPulseMessage(
 export function captureFeedbackCorrelation(
   category: FeedbackType,
   context: FeedbackContextSnapshot,
+  submissionId: string,
 ): string | null {
-  const safeContext = buildFeedbackSentryContext(category, context);
+  const safeContext = buildFeedbackSentryContext(category, context, submissionId);
   if (!safeContext) return null;
   return captureCourtPulseMessage(`CourtPulse user feedback: ${category}`, 'info', safeContext);
 }

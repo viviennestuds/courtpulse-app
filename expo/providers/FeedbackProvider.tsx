@@ -2,11 +2,15 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation } from '@tanstack/react-query';
 import { usePathname } from 'expo-router';
+import * as Crypto from 'expo-crypto';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
-import { submitFeedbackForm } from '@/services/feedback';
+import { hasFeedbackEndpoint, submitFeedbackForm } from '@/services/feedback';
+import { captureFeedbackCorrelation } from '@/services/observability';
+import { ensureFeedbackSubmissionAttempt } from '@/utils/feedbackContract';
 import type {
   FeedbackContextSnapshot,
   FeedbackFormInput,
+  FeedbackSubmissionAttempt,
   FeedbackType,
 } from '@/types/feedback';
 
@@ -23,6 +27,7 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
   const [overrideContext, setOverrideContext] = useState<FeedbackContextSnapshot | null>(null);
   const activeContextRef = useRef<FeedbackContextSnapshot>({});
   const submissionInFlightRef = useRef<boolean>(false);
+  const pendingAttemptRef = useRef<FeedbackSubmissionAttempt | null>(null);
 
   const { channel, resolved, overrides } = useFeatureFlags();
   const pathname = usePathname();
@@ -36,6 +41,8 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
   }, []);
 
   const openFeedback = useCallback((options?: OpenFeedbackOptions) => {
+    // The sheet intentionally clears its form on open, so opening starts a new logical report.
+    pendingAttemptRef.current = null;
     setPresetType(options?.type ?? 'bug');
     setPresetTitle(options?.title ?? '');
     setOverrideContext(options?.context ?? null);
@@ -63,12 +70,25 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
       if (submissionInFlightRef.current) throw new Error('Feedback submission already in progress');
       submissionInFlightRef.current = true;
       try {
+        const context = resolveContext();
+        const attempt = ensureFeedbackSubmissionAttempt(
+          pendingAttemptRef.current,
+          form.type,
+          context,
+          Crypto.randomUUID,
+          (category, safeContext, submissionId) => hasFeedbackEndpoint()
+            ? captureFeedbackCorrelation(category, safeContext, submissionId)
+            : null,
+        );
+        pendingAttemptRef.current = attempt;
         const result = await submitFeedbackForm({
           form,
-          context: resolveContext(),
+          context,
           flags: { channel, resolved, overrides },
+          attempt,
         });
         if (!result.ok) throw new Error(result.error.message);
+        pendingAttemptRef.current = null;
         return result;
       } finally {
         submissionInFlightRef.current = false;

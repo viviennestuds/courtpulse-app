@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import { APP_VERSION, versionString } from '@/constants/versionManifest';
-import { captureFeedbackCorrelation } from '@/services/observability';
 import { resolveObservabilityEnvironment } from '@/utils/observabilityContext';
 import {
   buildFeedbackSubmissionRequest,
@@ -11,6 +10,7 @@ import type {
   FeedbackContextSnapshot,
   FeedbackFormInput,
   FeedbackPlatform,
+  FeedbackSubmissionAttempt,
   FeedbackSubmissionRequest,
   FeedbackSubmissionResponse,
   FeedbackSubmissionSuccess,
@@ -27,7 +27,7 @@ export interface BuildPayloadArgs {
     resolved: Record<string, boolean>;
     overrides: Record<string, boolean>;
   };
-  sentryEventId?: string;
+  attempt: FeedbackSubmissionAttempt;
 }
 
 export interface FeedbackBackendDiagnostics {
@@ -66,7 +66,7 @@ export function buildFeedbackPayload({
   form,
   context,
   flags,
-  sentryEventId,
+  attempt,
 }: BuildPayloadArgs): FeedbackSubmissionRequest {
   const enabledFlags = Object.entries(flags.resolved)
     .filter(([, isEnabled]) => isEnabled)
@@ -80,7 +80,7 @@ export function buildFeedbackPayload({
     buildIdentifier: APP_VERSION.buildDate,
     stabilityChannel: flags.channel,
     featureContext: { enabledFlags, overriddenFlags },
-  }, sentryEventId);
+  }, attempt.submissionId, attempt.sentryEventId);
 }
 
 function safeFailure(code: string, message: string, retryable: boolean): SubmitFeedbackResult {
@@ -123,13 +123,9 @@ export async function submitFeedback(payload: FeedbackSubmissionRequest): Promis
   }
 }
 
-/** Builds, optionally correlates, and submits a form without exposing transport details to UI code. */
+/** Builds and submits one stable logical attempt without exposing transport details to UI code. */
 export async function submitFeedbackForm(args: BuildPayloadArgs): Promise<FeedbackSubmissionSuccess | Exclude<SubmitFeedbackResult, FeedbackSubmissionSuccess>> {
-  if (!hasFeedbackEndpoint()) {
-    return submitFeedback(buildFeedbackPayload(args));
-  }
-  const sentryEventId = captureFeedbackCorrelation(args.form.type, args.context) ?? undefined;
-  return submitFeedback(buildFeedbackPayload({ ...args, sentryEventId }));
+  return submitFeedback(buildFeedbackPayload(args));
 }
 
 export function hasFeedbackEndpoint(): boolean {

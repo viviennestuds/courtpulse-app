@@ -3,6 +3,7 @@ import type {
   FeedbackFormInput,
   FeedbackNotificationStatus,
   FeedbackRuntimeMetadata,
+  FeedbackSubmissionAttempt,
   FeedbackSubmissionRequest,
   FeedbackSubmissionResponse,
   FeedbackType,
@@ -76,10 +77,12 @@ export function buildFeedbackSubmissionRequest(
   form: FeedbackFormInput,
   context: FeedbackContextSnapshot,
   runtime: FeedbackRuntimeMetadata,
+  submissionId: string,
   sentryEventId?: string,
 ): FeedbackSubmissionRequest {
   return {
     schemaVersion: FEEDBACK_SCHEMA_VERSION,
+    submissionId,
     category: form.type,
     title: form.title.trim(),
     description: form.description.trim(),
@@ -118,7 +121,9 @@ export function parseFeedbackSubmissionResponse(status: number, value: unknown):
   }
   const data = value as Record<string, unknown>;
   if (status >= 200 && status < 300 && data.ok === true) {
-    const validNotificationStatuses: FeedbackNotificationStatus[] = ['not_configured', 'pending', 'sent', 'failed'];
+    const validNotificationStatuses: FeedbackNotificationStatus[] = [
+      'not_configured', 'pending', 'sent', 'failed', 'digested',
+    ];
     if (
       data.schemaVersion !== FEEDBACK_SCHEMA_VERSION
       || typeof data.feedbackId !== 'string'
@@ -127,6 +132,7 @@ export function parseFeedbackSubmissionResponse(status: number, value: unknown):
       || !/^CP-FB-[A-F0-9]{6}$/.test(data.feedbackReference)
       || typeof data.notificationStatus !== 'string'
       || !validNotificationStatuses.includes(data.notificationStatus as FeedbackNotificationStatus)
+      || typeof data.idempotentReplay !== 'boolean'
       || (data.sentryEventId !== undefined && (
         typeof data.sentryEventId !== 'string' || !/^[a-fA-F0-9]{32}$/.test(data.sentryEventId)
       ))
@@ -139,6 +145,7 @@ export function parseFeedbackSubmissionResponse(status: number, value: unknown):
       feedbackId: data.feedbackId,
       feedbackReference: data.feedbackReference,
       notificationStatus: data.notificationStatus as FeedbackNotificationStatus,
+      idempotentReplay: data.idempotentReplay,
       sentryEventId: data.sentryEventId as string | undefined,
     };
   }
@@ -153,16 +160,38 @@ export function parseFeedbackSubmissionResponse(status: number, value: unknown):
   return responseFailure('submission_failed', 'Feedback could not be sent', status >= 500);
 }
 
+/** Retains one idempotency/correlation identity until its logical report is confirmed. */
+export function ensureFeedbackSubmissionAttempt(
+  current: FeedbackSubmissionAttempt | null,
+  category: FeedbackType,
+  context: FeedbackContextSnapshot,
+  createSubmissionId: () => string,
+  captureCorrelation: (
+    category: FeedbackType,
+    context: FeedbackContextSnapshot,
+    submissionId: string,
+  ) => string | null,
+): FeedbackSubmissionAttempt {
+  if (current) return current;
+  const submissionId = createSubmissionId();
+  const sentryEventId = TECHNICAL_FEEDBACK_TYPES.includes(category)
+    ? captureCorrelation(category, context, submissionId) ?? undefined
+    : undefined;
+  return { submissionId, sentryEventId };
+}
+
 /** Returns the only metadata permitted in a feedback-correlation Sentry event. */
 export function buildFeedbackSentryContext(
   category: FeedbackType,
   context: FeedbackContextSnapshot,
+  submissionId?: string,
 ): Record<string, string | boolean> | null {
   if (!TECHNICAL_FEEDBACK_TYPES.includes(category)) return null;
   const safeContext: Record<string, string | boolean> = {
     feedback_category: category,
     feedback_correlation: true,
   };
+  if (submissionId) safeContext.feedback_submission_id = submissionId;
   const route = sanitizeRoute(context.route);
   const gameId = boundedOptional(context.gameId, 64);
   const activeGameTab = deriveActiveGameTab(context);

@@ -8,13 +8,19 @@ export const FEEDBACK_CATEGORIES = [
   "question",
 ] as const;
 
+export const DEFAULT_DIGEST_WINDOW_MINUTES = 60;
+export const MIN_DIGEST_WINDOW_MINUTES = 5;
+export const MAX_DIGEST_WINDOW_MINUTES = 24 * 60;
+
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
-export type NotificationStatus = "not_configured" | "pending" | "sent" | "failed";
+export type NotificationClass = "immediate" | "digest";
+export type NotificationStatus = "not_configured" | "pending" | "sent" | "failed" | "digested";
 
 type JsonRecord = Record<string, unknown>;
 
 export interface ValidFeedbackSubmission {
   schemaVersion: typeof FEEDBACK_SCHEMA_VERSION;
+  submissionId: string;
   category: FeedbackCategory;
   title: string;
   description: string;
@@ -47,9 +53,15 @@ export interface ValidationResult {
   error?: string;
 }
 
+export interface NotificationEligibility {
+  notificationClass: NotificationClass;
+  eligibleAt: string;
+  digestWindowMinutes: number;
+}
+
 const TOP_LEVEL_KEYS = new Set([
-  "schemaVersion", "category", "title", "description", "expectedBehavior", "actualBehavior",
-  "reproSteps", "reporterName", "reporterContact", "context", "sentryEventId", "source",
+  "schemaVersion", "submissionId", "category", "title", "description", "expectedBehavior",
+  "actualBehavior", "reproSteps", "reporterName", "reporterContact", "context", "sentryEventId", "source",
 ]);
 const CONTEXT_KEYS = new Set([
   "platform", "environment", "appVersion", "buildIdentifier", "stabilityChannel", "screen",
@@ -58,7 +70,9 @@ const CONTEXT_KEYS = new Set([
 const SENSITIVE_KEY = /authorization|contact|cookie|dsn|email|password|payload|query|raw|requestbody|responsebody|search|secret|tester|token/i;
 const SAFE_CONTEXT_KEY = /^[A-Za-z0-9_.:-]{1,80}$/;
 const GAME_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SENTRY_EVENT_ID = /^[a-fA-F0-9]{32}$/;
+const TECHNICAL_CATEGORIES: readonly FeedbackCategory[] = ["bug", "performance"];
 
 function isRecord(value: unknown): value is JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -84,6 +98,10 @@ function optionalString(value: unknown, maxLength: number): string | undefined |
   return normalized;
 }
 
+function sanitizeRoute(value: string | undefined): string | undefined {
+  return value?.split(/[?#]/, 1)[0] || undefined;
+}
+
 function isSafeJson(value: unknown, depth = 0): boolean {
   if (depth > 4) return false;
   if (value === null || typeof value === "boolean") return true;
@@ -107,12 +125,69 @@ function validJsonObject(value: unknown, maxBytes: number): value is JsonRecord 
   }
 }
 
+function normalizeFingerprintText(value: string | undefined): string {
+  return (value ?? "").trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
+}
+
+/** Classifies notification urgency solely from the server-validated category. */
+export function notificationClassForCategory(category: FeedbackCategory): NotificationClass {
+  return TECHNICAL_CATEGORIES.includes(category) ? "immediate" : "digest";
+}
+
+/** Prevents digest reports and idempotent replays from triggering the immediate notifier. */
+export function shouldAttemptImmediateNotification(
+  notificationClass: NotificationClass,
+  idempotentReplay: boolean,
+): boolean {
+  return notificationClass === "immediate" && !idempotentReplay;
+}
+
+/** Parses one bounded digest window configuration, safely falling back to 60 minutes. */
+export function resolveDigestWindowMinutes(rawValue: string | undefined): number {
+  if (!rawValue?.trim()) return DEFAULT_DIGEST_WINDOW_MINUTES;
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < MIN_DIGEST_WINDOW_MINUTES || parsed > MAX_DIGEST_WINDOW_MINUTES) {
+    return DEFAULT_DIGEST_WINDOW_MINUTES;
+  }
+  return parsed;
+}
+
+/** Computes server-owned notification classification and eligibility from one captured clock value. */
+export function notificationEligibilityForSubmission(
+  category: FeedbackCategory,
+  now: Date,
+  rawDigestWindowMinutes: string | undefined,
+): NotificationEligibility {
+  const notificationClass = notificationClassForCategory(category);
+  const digestWindowMinutes = resolveDigestWindowMinutes(rawDigestWindowMinutes);
+  const eligibleAt = notificationClass === "immediate"
+    ? now.toISOString()
+    : new Date(now.getTime() + digestWindowMinutes * 60_000).toISOString();
+  return { notificationClass, eligibleAt, digestWindowMinutes };
+}
+
+/** Produces a server-only SHA-256 grouping signal without reporter or request identity fields. */
+export async function createContentFingerprint(payload: ValidFeedbackSubmission): Promise<string> {
+  const fingerprintInput = JSON.stringify([
+    normalizeFingerprintText(payload.category),
+    normalizeFingerprintText(payload.title),
+    normalizeFingerprintText(payload.description),
+    normalizeFingerprintText(payload.context.gameId),
+    normalizeFingerprintText(sanitizeRoute(payload.context.route)),
+  ]);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function validateFeedbackSubmission(input: unknown): ValidationResult {
   if (!isRecord(input) || !hasOnlyKeys(input, TOP_LEVEL_KEYS)) {
     return { ok: false, error: "Invalid feedback payload" };
   }
   if (input.schemaVersion !== FEEDBACK_SCHEMA_VERSION) {
     return { ok: false, error: "Unsupported feedback schema" };
+  }
+  if (typeof input.submissionId !== "string" || !UUID.test(input.submissionId)) {
+    return { ok: false, error: "Invalid submission identifier" };
   }
   if (typeof input.category !== "string" || !FEEDBACK_CATEGORIES.includes(input.category as FeedbackCategory)) {
     return { ok: false, error: "Invalid feedback category" };
@@ -155,7 +230,8 @@ export function validateFeedbackSubmission(input: unknown): ValidationResult {
   const buildIdentifier = requiredString(context.buildIdentifier, 64);
   const screen = requiredString(context.screen, 120);
   const subscreen = optionalString(context.subscreen, 120);
-  const route = optionalString(context.route, 240);
+  const rawRoute = optionalString(context.route, 240);
+  const route = rawRoute === null ? null : sanitizeRoute(rawRoute);
   const gameId = optionalString(context.gameId, 64);
   const activeGameTab = optionalString(context.activeGameTab, 64);
   if (!appVersion || !buildIdentifier || !screen || [subscreen, route, gameId, activeGameTab].includes(null)) {
@@ -170,12 +246,17 @@ export function validateFeedbackSubmission(input: unknown): ValidationResult {
   if (sentryEventId === null || (sentryEventId && !SENTRY_EVENT_ID.test(sentryEventId))) {
     return { ok: false, error: "Invalid Sentry correlation identifier" };
   }
+  const category = input.category as FeedbackCategory;
+  if (sentryEventId && !TECHNICAL_CATEGORIES.includes(category)) {
+    return { ok: false, error: "Sentry correlation is not allowed for this category" };
+  }
 
   return {
     ok: true,
     value: {
       schemaVersion: FEEDBACK_SCHEMA_VERSION,
-      category: input.category as FeedbackCategory,
+      submissionId: input.submissionId.toLowerCase(),
+      category,
       title,
       description,
       expectedBehavior: expectedBehavior ?? undefined,

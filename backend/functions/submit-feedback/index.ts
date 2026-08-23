@@ -1,13 +1,29 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   FEEDBACK_SCHEMA_VERSION,
+  createContentFingerprint,
+  notificationEligibilityForSubmission,
+  shouldAttemptImmediateNotification,
+  type NotificationEligibility,
   type NotificationStatus,
   type ValidFeedbackSubmission,
   validateFeedbackSubmission,
 } from "./validation.ts";
+import {
+  persistFeedbackIdempotently,
+  type PersistedFeedbackRecord,
+  type PersistenceAttempt,
+} from "./idempotency.ts";
 
 const MAX_BODY_BYTES = 32_768;
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
+const VALID_NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
+  "not_configured",
+  "pending",
+  "sent",
+  "failed",
+  "digested",
+];
 
 type JsonRecord = Record<string, unknown>;
 
@@ -71,8 +87,24 @@ function feedbackReference(id: string): string {
   return `CP-FB-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
 }
 
-function toInsertRow(payload: ValidFeedbackSubmission, notificationStatus: NotificationStatus): JsonRecord {
+function initialNotificationStatus(
+  eligibility: NotificationEligibility,
+  isNotifierConfigured: boolean,
+): NotificationStatus {
+  if (eligibility.notificationClass === "digest") return "pending";
+  return isNotifierConfigured ? "pending" : "not_configured";
+}
+
+function toInsertRow(
+  payload: ValidFeedbackSubmission,
+  contentFingerprint: string,
+  eligibility: NotificationEligibility,
+  createdAt: string,
+  notificationStatus: NotificationStatus,
+): JsonRecord {
   return {
+    submission_id: payload.submissionId,
+    created_at: createdAt,
     status: "new",
     category: payload.category,
     title: payload.title,
@@ -96,9 +128,36 @@ function toInsertRow(payload: ValidFeedbackSubmission, notificationStatus: Notif
     feature_context_json: payload.context.featureContext,
     sentry_event_id: payload.sentryEventId ?? null,
     source: payload.source,
+    content_fingerprint: contentFingerprint,
+    notification_class: eligibility.notificationClass,
     notification_status: notificationStatus,
+    notification_eligible_at: eligibility.eligibleAt,
+    notified_at: null,
     notification_error: null,
-    metadata_json: { schemaVersion: payload.schemaVersion },
+    metadata_json: {
+      schemaVersion: payload.schemaVersion,
+      ...(eligibility.notificationClass === "digest"
+        ? { digestWindowMinutes: eligibility.digestWindowMinutes }
+        : {}),
+    },
+  };
+}
+
+function persistedRecord(value: unknown): PersistedFeedbackRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.id !== "string"
+    || typeof record.notification_status !== "string"
+    || !VALID_NOTIFICATION_STATUSES.includes(record.notification_status as NotificationStatus)
+    || (record.sentry_event_id !== null && typeof record.sentry_event_id !== "string")
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    notification_status: record.notification_status,
+    sentry_event_id: record.sentry_event_id as string | null,
   };
 }
 
@@ -190,43 +249,78 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const payload = validation.value;
+  const createdAt = new Date();
+  const eligibility = notificationEligibilityForSubmission(
+    payload.category,
+    createdAt,
+    Deno.env.get("FEEDBACK_DIGEST_WINDOW_MINUTES"),
+  );
   const isNotifierConfigured = Boolean(Deno.env.get("BRRR_NOTIFY_URL")?.trim());
-  const initialNotificationStatus: NotificationStatus = isNotifierConfigured ? "pending" : "not_configured";
+  const initialStatus = initialNotificationStatus(eligibility, isNotifierConfigured);
 
   try {
+    const contentFingerprint = await createContentFingerprint(payload);
     const supabase = adminClient();
-    const { data, error } = await supabase
-      .from("feedback_reports")
-      .insert(toInsertRow(payload, initialNotificationStatus))
-      .select("id")
-      .single();
+    const insertRow = toInsertRow(
+      payload,
+      contentFingerprint,
+      eligibility,
+      createdAt.toISOString(),
+      initialStatus,
+    );
 
-    if (error || !data?.id || typeof data.id !== "string") {
-      console.error("[submit-feedback] persistence failed", error?.code ?? "missing_id");
+    const persistence = await persistFeedbackIdempotently<PersistedFeedbackRecord>(
+      async (): Promise<PersistenceAttempt<PersistedFeedbackRecord>> => {
+        const { data, error } = await supabase
+          .from("feedback_reports")
+          .insert(insertRow)
+          .select("id, notification_status, sentry_event_id")
+          .single();
+        return { record: persistedRecord(data), errorCode: error?.code };
+      },
+      async (): Promise<PersistenceAttempt<PersistedFeedbackRecord>> => {
+        const { data, error } = await supabase
+          .from("feedback_reports")
+          .select("id, notification_status, sentry_event_id")
+          .eq("submission_id", payload.submissionId)
+          .single();
+        return { record: persistedRecord(data), errorCode: error?.code };
+      },
+    );
+
+    if (!persistence.ok) {
+      console.error("[submit-feedback] persistence failed", persistence.errorCode);
       return errorResponse(req, 503, "persistence_unavailable", "Feedback could not be saved", true);
     }
 
-    const reportId = data.id;
-    const notification = await sendBestEffortNotification(payload, reportId);
-    if (notification.status !== initialNotificationStatus || notification.error) {
-      const { error: updateError } = await supabase
-        .from("feedback_reports")
-        .update({
-          notification_status: notification.status,
-          notification_error: notification.error ?? null,
-        })
-        .eq("id", reportId);
-      if (updateError) console.warn("[submit-feedback] notification status update failed", updateError.code);
+    const { record, idempotentReplay } = persistence;
+    let notificationStatus = record.notification_status as NotificationStatus;
+
+    if (shouldAttemptImmediateNotification(eligibility.notificationClass, idempotentReplay)) {
+      const notification = await sendBestEffortNotification(payload, record.id);
+      notificationStatus = notification.status;
+      if (notification.status !== initialStatus || notification.error) {
+        const { error: updateError } = await supabase
+          .from("feedback_reports")
+          .update({
+            notification_status: notification.status,
+            notified_at: notification.status === "sent" ? new Date().toISOString() : null,
+            notification_error: notification.error ?? null,
+          })
+          .eq("id", record.id);
+        if (updateError) console.warn("[submit-feedback] notification status update failed", updateError.code);
+      }
     }
 
     return jsonResponse(req, {
       ok: true,
       schemaVersion: FEEDBACK_SCHEMA_VERSION,
-      feedbackId: reportId,
-      feedbackReference: feedbackReference(reportId),
-      notificationStatus: notification.status,
-      ...(payload.sentryEventId ? { sentryEventId: payload.sentryEventId } : {}),
-    }, 201);
+      feedbackId: record.id,
+      feedbackReference: feedbackReference(record.id),
+      notificationStatus,
+      idempotentReplay,
+      ...(record.sentry_event_id ? { sentryEventId: record.sentry_event_id } : {}),
+    }, idempotentReplay ? 200 : 201);
   } catch {
     console.error("[submit-feedback] unexpected persistence failure");
     return errorResponse(req, 503, "persistence_unavailable", "Feedback could not be saved", true);

@@ -8,7 +8,7 @@ export type FeedbackType =
 
 export type FeedbackEnvironment = 'development' | 'preview' | 'production';
 export type FeedbackPlatform = 'ios' | 'android' | 'web' | 'unknown';
-export type FeedbackNotificationStatus = 'not_configured' | 'pending' | 'sent' | 'failed';
+export type FeedbackNotificationStatus = 'not_configured' | 'pending' | 'sent' | 'failed' | 'digested';
 
 export interface FeedbackContextSnapshot {
   screen?: string;
@@ -56,6 +56,7 @@ export interface FeedbackSubmissionContext {
 
 export interface FeedbackSubmissionRequest {
   schemaVersion: 'courtPulse.feedback.v1';
+  submissionId: string;
   category: FeedbackType;
   title: string;
   description: string;
@@ -69,12 +70,18 @@ export interface FeedbackSubmissionRequest {
   source: 'courtpulse_app';
 }
 
+export interface FeedbackSubmissionAttempt {
+  submissionId: string;
+  sentryEventId?: string;
+}
+
 export interface FeedbackSubmissionSuccess {
   ok: true;
   schemaVersion: 'courtPulse.feedback.v1';
   feedbackId: string;
   feedbackReference: string;
   notificationStatus: FeedbackNotificationStatus;
+  idempotentReplay: boolean;
   sentryEventId?: string;
 }
 

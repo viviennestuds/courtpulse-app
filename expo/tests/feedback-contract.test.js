@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildFeedbackSentryContext,
   buildFeedbackSubmissionRequest,
+  ensureFeedbackSubmissionAttempt,
   normalizeFeedbackEndpoint,
   parseFeedbackSubmissionResponse,
 } from '../utils/feedbackContract.ts';
@@ -43,10 +44,11 @@ describe('CourtPulse feedback client contract', () => {
       gameId: '0042500117',
       filters: { team: 'home', token: 'must be removed' },
       extra: { activeGameTab: 'shots' },
-    }, runtime, '0123456789abcdef0123456789abcdef');
+    }, runtime, '123e4567-e89b-42d3-a456-426614174000', '0123456789abcdef0123456789abcdef');
 
     expect(request).toEqual({
       schemaVersion: 'courtPulse.feedback.v1',
+      submissionId: '123e4567-e89b-42d3-a456-426614174000',
       category: 'bug',
       title: 'Shot chart issue',
       description: 'A point is misplaced.',
@@ -81,6 +83,7 @@ describe('CourtPulse feedback client contract', () => {
       feedbackId: '123e4567-e89b-12d3-a456-426614174000',
       feedbackReference: 'CP-FB-123E45',
       notificationStatus: 'failed',
+      idempotentReplay: false,
       sentryEventId: '0123456789abcdef0123456789abcdef',
     });
     expect(result.ok).toBe(true);
@@ -102,6 +105,59 @@ describe('CourtPulse feedback client contract', () => {
       ok: false,
       error: { code: 'invalid_response' },
     });
+  });
+
+  test('retains one submission UUID and one Sentry event across retries', () => {
+    let uuidCalls = 0;
+    let sentryCalls = 0;
+    const createSubmissionId = () => {
+      uuidCalls += 1;
+      return '123e4567-e89b-42d3-a456-426614174000';
+    };
+    const captureCorrelation = () => {
+      sentryCalls += 1;
+      return '0123456789abcdef0123456789abcdef';
+    };
+    const context = { screen: 'GameDetail', route: '/game/0042500117' };
+
+    const first = ensureFeedbackSubmissionAttempt(
+      null,
+      'bug',
+      context,
+      createSubmissionId,
+      captureCorrelation,
+    );
+    const retry = ensureFeedbackSubmissionAttempt(
+      first,
+      'bug',
+      context,
+      createSubmissionId,
+      captureCorrelation,
+    );
+
+    expect(retry).toBe(first);
+    expect(retry).toEqual({
+      submissionId: '123e4567-e89b-42d3-a456-426614174000',
+      sentryEventId: '0123456789abcdef0123456789abcdef',
+    });
+    expect(uuidCalls).toBe(1);
+    expect(sentryCalls).toBe(1);
+  });
+
+  test('keeps non-technical attempts Sentry-free', () => {
+    let sentryCalls = 0;
+    const attempt = ensureFeedbackSubmissionAttempt(
+      null,
+      'feature_request',
+      { screen: 'Games' },
+      () => '123e4567-e89b-42d3-a456-426614174000',
+      () => {
+        sentryCalls += 1;
+        return '0123456789abcdef0123456789abcdef';
+      },
+    );
+    expect(attempt.sentryEventId).toBeUndefined();
+    expect(sentryCalls).toBe(0);
   });
 
   test('correlates only technical categories with privacy-safe metadata', () => {
