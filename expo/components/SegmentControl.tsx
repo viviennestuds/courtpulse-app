@@ -59,15 +59,16 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm - 2,
     alignItems: 'center',
     borderRadius: BorderRadius.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   segmentActive: {
     backgroundColor: Colors.primaryMuted,
   },
   segmentFocused: {
-    borderWidth: 2,
     borderColor: Colors.primary,
   },
   segmentPressed: {

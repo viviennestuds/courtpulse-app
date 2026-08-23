@@ -12,6 +12,7 @@ import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { formatPossessionSample } from '@/utils/metricValidation';
 import { usePbpStatsValidation } from '@/services/pbpStatsValidation';
 import PossessionAuditSheet from '@/components/PossessionAuditSheet';
+import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 import {
   buildOffensiveRatingTrace,
   buildDefensiveRatingTrace,
@@ -542,6 +543,7 @@ export default function OnCourtSummaryDetailSheet({
   validationSnapshot,
 }: OnCourtSummaryDetailSheetProps) {
   const insets = useSafeAreaInsets();
+  const { analyticalModalSheetStyle } = useResponsiveLayout();
   const sampleLabelsEnabled = useFeatureFlag('enableOnCourtSampleLabels');
   const confidenceLabelsEnabled = useFeatureFlag('enableMetricConfidenceLabels');
   const debugEnabled = useFeatureFlag('enableMetricValidationDebug');
@@ -615,7 +617,7 @@ export default function OnCourtSummaryDetailSheet({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.dismiss} onPress={onClose} />
-        <View style={[styles.container, { paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={[styles.container, analyticalModalSheetStyle, { paddingBottom: insets.bottom + Spacing.md }]}>
           <View style={styles.handle} />
 
           <View style={styles.header}>

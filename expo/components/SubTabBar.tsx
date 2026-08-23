@@ -65,16 +65,17 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm - 2,
     alignItems: 'center',
     borderRadius: BorderRadius.sm - 1,
+    borderWidth: 2,
+    borderColor: 'transparent',
     position: 'relative' as const,
   },
   tabActive: {
     backgroundColor: Colors.surfaceLight,
   },
   tabFocused: {
-    borderWidth: 2,
     borderColor: Colors.primary,
   },
   tabPressed: {
@@ -83,7 +84,7 @@ const styles = StyleSheet.create({
   tabCompact: {
     backgroundColor: 'transparent',
     borderRadius: 0,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.md - 2,
   },
   tabText: {
     color: Colors.textMuted,

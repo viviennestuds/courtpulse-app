@@ -3,6 +3,7 @@ import type { LayoutChangeEvent, ViewStyle } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import {
   classifyResponsiveWidth,
+  getGutteredModalWidth,
   ResponsiveLayout,
   type ResponsiveTier,
 } from '@/utils/responsiveLayout';
@@ -17,6 +18,7 @@ export interface ResponsiveLayoutState {
   isWide: boolean;
   frameStyle: ViewStyle;
   modalSheetStyle: ViewStyle | undefined;
+  analyticalModalSheetStyle: ViewStyle | undefined;
 }
 
 export interface MeasuredContentWidth {
@@ -44,6 +46,15 @@ export function useResponsiveLayout(): ResponsiveLayoutState {
     };
   }, [tier]);
 
+  const analyticalModalSheetStyle = useMemo<ViewStyle | undefined>(() => {
+    if (tier === 'compact') return undefined;
+    return {
+      width: getGutteredModalWidth(viewportWidth, ResponsiveLayout.analyticalModalMaxWidth),
+      maxWidth: ResponsiveLayout.analyticalModalMaxWidth,
+      alignSelf: 'center',
+    };
+  }, [tier, viewportWidth]);
+
   return {
     tier,
     viewportWidth,
@@ -51,6 +62,7 @@ export function useResponsiveLayout(): ResponsiveLayoutState {
     isWide: tier === 'wide',
     frameStyle,
     modalSheetStyle,
+    analyticalModalSheetStyle,
   };
 }
 

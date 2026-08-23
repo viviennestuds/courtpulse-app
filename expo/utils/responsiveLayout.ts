@@ -5,6 +5,7 @@ export const ResponsiveLayout = {
   mediumMaxWidth: 1199,
   contentMaxWidth: 880,
   modalMaxWidth: 620,
+  analyticalModalMaxWidth: 1040,
   pageGutter: 16,
 } as const;
 
@@ -13,6 +14,12 @@ export function classifyResponsiveWidth(width: number): ResponsiveTier {
   if (width <= ResponsiveLayout.compactMaxWidth) return 'compact';
   if (width <= ResponsiveLayout.mediumMaxWidth) return 'medium';
   return 'wide';
+}
+
+/** Returns a centered sheet width capped by the selected policy and viewport gutters. */
+export function getGutteredModalWidth(viewportWidth: number, maxWidth: number): number {
+  const availableWidth = Math.max(0, viewportWidth - ResponsiveLayout.pageGutter * 2);
+  return Math.min(availableWidth, maxWidth);
 }
 
 export interface MeasuredChartGeometry {

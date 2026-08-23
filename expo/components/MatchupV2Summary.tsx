@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
 import {
   Check,
   ChevronDown,
@@ -241,56 +240,63 @@ function KeyMatchupCard({
   const offenseColor = teamColorFor(offense, homeTeam, awayTeam);
   const defenseColor = teamColorFor(defense, homeTeam, awayTeam);
   const [reasonsExpanded, setReasonsExpanded] = useState<boolean>(false);
+  const [isMainActionFocused, setIsMainActionFocused] = useState<boolean>(false);
+  const [isReasonsActionFocused, setIsReasonsActionFocused] = useState<boolean>(false);
   const initiallyVisibleReasonCount = Math.min(2, matchup.notabilityReasons.length);
   const visibleReasons = reasonsExpanded
     ? matchup.notabilityReasons
     : matchup.notabilityReasons.slice(0, initiallyVisibleReasonCount);
   const hiddenReasonCount = Math.max(0, matchup.notabilityReasons.length - initiallyVisibleReasonCount);
-  const handleToggleReasons = useCallback((event: GestureResponderEvent) => {
-    event.stopPropagation();
+  const handleToggleReasons = useCallback(() => {
     setReasonsExpanded((value: boolean) => !value);
   }, []);
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }: { pressed: boolean }) => [
-        styles.keyMatchupCard,
-        isActive && styles.keyMatchupCardActive,
-        pressed && styles.keyMatchupCardPressed,
-      ]}
-      testID={`matchup-v2-key-matchup-${asId(offense.playerId)}-${asId(defense.playerId)}`}
-      accessibilityRole="button"
-      accessibilityLabel={`${offense.name} versus ${defense.name}. ${isActive ? 'Loaded in Film Room.' : 'Tap to load in Film Room.'}`}
-    >
-      <View style={styles.pairingRow}>
-        <View style={styles.pairingNames}>
-          <View style={styles.playerNameRow}>
-            <View style={[styles.teamDot, { backgroundColor: offenseColor }]} />
-            <Text style={styles.offenseName} numberOfLines={1}>{offense.name}</Text>
-            <Text style={[styles.teamTricode, { color: offenseColor }]}>{offense.teamTricode}</Text>
+    <View style={[styles.keyMatchupCard, isActive && styles.keyMatchupCardActive]}>
+      <Pressable
+        onPress={onPress}
+        onFocus={() => setIsMainActionFocused(true)}
+        onBlur={() => setIsMainActionFocused(false)}
+        focusable
+        style={({ pressed }: { pressed: boolean }) => [
+          styles.keyMatchupMainAction,
+          isMainActionFocused && styles.keyMatchupActionFocused,
+          pressed && styles.keyMatchupCardPressed,
+        ]}
+        testID={`matchup-v2-key-matchup-${asId(offense.playerId)}-${asId(defense.playerId)}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${offense.name} versus ${defense.name}. ${isActive ? 'Loaded in Film Room.' : 'Tap to load in Film Room.'}`}
+      >
+        <View style={styles.pairingRow}>
+          <View style={styles.pairingNames}>
+            <View style={styles.playerNameRow}>
+              <View style={[styles.teamDot, { backgroundColor: offenseColor }]} />
+              <Text style={styles.offenseName} numberOfLines={1}>{offense.name}</Text>
+              <Text style={[styles.teamTricode, { color: offenseColor }]}>{offense.teamTricode}</Text>
+            </View>
+            <View style={styles.playerNameRow}>
+              <Text style={styles.versusText}>vs</Text>
+              <View style={[styles.teamDot, { backgroundColor: defenseColor }]} />
+              <Text style={styles.defenseName} numberOfLines={1}>{defense.name}</Text>
+              <Text style={[styles.teamTricode, { color: defenseColor }]}>{defense.teamTricode}</Text>
+            </View>
           </View>
-          <View style={styles.playerNameRow}>
-            <Text style={styles.versusText}>vs</Text>
-            <View style={[styles.teamDot, { backgroundColor: defenseColor }]} />
-            <Text style={styles.defenseName} numberOfLines={1}>{defense.name}</Text>
-            <Text style={[styles.teamTricode, { color: defenseColor }]}>{defense.teamTricode}</Text>
-          </View>
+          {isActive ? (
+            <View style={styles.loadedBadge} testID="matchup-v2-key-matchup-active">
+              <Film size={11} color={Colors.accent} />
+              <Text style={styles.loadedBadgeText}>LOADED</Text>
+            </View>
+          ) : null}
         </View>
-        {isActive ? (
-          <View style={styles.loadedBadge} testID="matchup-v2-key-matchup-active">
-            <Film size={11} color={Colors.accent} />
-            <Text style={styles.loadedBadgeText}>LOADED</Text>
-          </View>
-        ) : null}
-      </View>
 
-      <Text style={styles.exposureLine}>
-        {matchup.boxScore.matchupTime} · {matchup.boxScore.partialPossessions.toFixed(1)} matchup poss.
-      </Text>
-      <Text style={styles.boxScoreLine}>
-        {matchup.boxScore.offense.points} PTS · {matchup.boxScore.offense.fgm}/{matchup.boxScore.offense.fga} FG
-      </Text>
+        <Text style={styles.exposureLine}>
+          {matchup.boxScore.matchupTime} · {matchup.boxScore.partialPossessions.toFixed(1)} matchup poss.
+        </Text>
+        <Text style={styles.boxScoreLine}>
+          {matchup.boxScore.offense.points} PTS · {matchup.boxScore.offense.fgm}/{matchup.boxScore.offense.fga} FG
+        </Text>
+        {!isActive ? <Text style={styles.loadAffordance}>Tap to load in Film Room</Text> : null}
+      </Pressable>
 
       {visibleReasons.length > 0 ? (
         <View style={styles.reasonList}>
@@ -304,9 +310,17 @@ function KeyMatchupCard({
           {hiddenReasonCount > 0 ? (
             <Pressable
               onPress={handleToggleReasons}
+              onFocus={() => setIsReasonsActionFocused(true)}
+              onBlur={() => setIsReasonsActionFocused(false)}
+              focusable
               hitSlop={8}
-              style={({ pressed }: { pressed: boolean }) => [styles.moreReasonsButton, pressed && styles.localControlPressed]}
+              style={({ pressed }: { pressed: boolean }) => [
+                styles.moreReasonsButton,
+                isReasonsActionFocused && styles.moreReasonsButtonFocused,
+                pressed && styles.localControlPressed,
+              ]}
               accessibilityRole="button"
+              accessibilityState={{ expanded: reasonsExpanded }}
               accessibilityLabel={reasonsExpanded ? 'Show fewer matchup signals' : `Show ${hiddenReasonCount} more matchup signals`}
               testID={`matchup-v2-key-matchup-reasons-${asId(offense.playerId)}-${asId(defense.playerId)}`}
             >
@@ -322,9 +336,7 @@ function KeyMatchupCard({
           ) : null}
         </View>
       ) : null}
-
-      {!isActive ? <Text style={styles.loadAffordance}>Tap to load in Film Room</Text> : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -437,8 +449,14 @@ function MatchupV2PlayerPicker({
       animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={[styles.modalSheet, modalSheetStyle]} onPress={() => {}}>
+      <View style={styles.modalBackdrop}>
+        <Pressable
+          style={styles.modalBackdropDismiss}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss player picker"
+        />
+        <View style={[styles.modalSheet, modalSheetStyle]}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Offensive player</Text>
@@ -471,8 +489,8 @@ function MatchupV2PlayerPicker({
             }}
             style={styles.modalList}
           />
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -760,6 +778,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.accent,
     backgroundColor: 'rgba(139,92,246,0.08)',
   },
+  keyMatchupMainAction: {
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderRadius: BorderRadius.md,
+    margin: -4,
+    padding: 2,
+  },
+  keyMatchupActionFocused: {
+    borderColor: Colors.primary,
+  },
   keyMatchupCardPressed: {
     opacity: 0.82,
   },
@@ -884,7 +912,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     marginLeft: 66,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderRadius: BorderRadius.sm,
+  },
+  moreReasonsButtonFocused: {
+    borderColor: Colors.secondary,
   },
   moreReasonsText: {
     color: Colors.secondary,
@@ -1107,6 +1141,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
+  },
+  modalBackdropDismiss: {
+    flex: 1,
+    alignSelf: 'stretch',
   },
   modalSheet: {
     backgroundColor: Colors.cardBg,

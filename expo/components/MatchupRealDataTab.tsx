@@ -1356,8 +1356,14 @@ function OffensivePickerModal({
       animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={[styles.modalSheet, modalSheetStyle]} onPress={() => {}}>
+      <View style={styles.modalBackdrop}>
+        <Pressable
+          style={styles.modalBackdropDismiss}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss Film Room player picker"
+        />
+        <View style={[styles.modalSheet, modalSheetStyle]}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Offensive player</Text>
@@ -1396,8 +1402,8 @@ function OffensivePickerModal({
             ItemSeparatorComponent={() => <View style={styles.modalSep} />}
             style={styles.modalList}
           />
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -1424,8 +1430,14 @@ function DefenderPickerModal({
       animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={[styles.modalSheet, modalSheetStyle]} onPress={() => {}}>
+      <View style={styles.modalBackdrop}>
+        <Pressable
+          style={styles.modalBackdropDismiss}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss Film Room player picker"
+        />
+        <View style={[styles.modalSheet, modalSheetStyle]}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Defender</Text>
@@ -1460,8 +1472,8 @@ function DefenderPickerModal({
             ItemSeparatorComponent={() => <View style={styles.modalSep} />}
             style={styles.modalList}
           />
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -2149,6 +2161,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
+  },
+  modalBackdropDismiss: {
+    flex: 1,
+    alignSelf: 'stretch',
   },
   modalSheet: {
     backgroundColor: Colors.cardBg,
