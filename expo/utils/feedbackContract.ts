@@ -4,10 +4,12 @@ import type {
   FeedbackNotificationStatus,
   FeedbackRuntimeMetadata,
   FeedbackSubmissionAttempt,
+  FeedbackSubmissionFailure,
   FeedbackSubmissionRequest,
   FeedbackSubmissionResponse,
   FeedbackType,
 } from '@/types/feedback';
+import { FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE } from '@/types/feedback';
 
 export const FEEDBACK_SCHEMA_VERSION = 'courtPulse.feedback.v1' as const;
 export const TECHNICAL_FEEDBACK_TYPES: readonly FeedbackType[] = ['bug', 'performance'];
@@ -105,7 +107,7 @@ export function buildFeedbackSubmissionRequest(
       filters: sanitizeStructuredObject(context.filters),
       featureContext: sanitizeStructuredObject(runtime.featureContext),
     },
-    sentryEventId,
+    sentryEventId: TECHNICAL_FEEDBACK_TYPES.includes(form.type) ? sentryEventId : undefined,
     source: 'courtpulse_app',
   };
 }
@@ -154,10 +156,25 @@ export function parseFeedbackSubmissionResponse(status: number, value: unknown):
   if (backendError && typeof backendError === 'object' && !Array.isArray(backendError)) {
     const error = backendError as Record<string, unknown>;
     const code = typeof error.code === 'string' ? error.code.slice(0, 80) : 'submission_failed';
+    if (status === 409 && code === FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE) {
+      return responseFailure(
+        code,
+        'The earlier version of this report was already received. Submit again to send your edited version.',
+        false,
+      );
+    }
     const retryable = typeof error.retryable === 'boolean' ? error.retryable : status >= 500;
     return responseFailure(code, 'Feedback could not be sent', retryable);
   }
   return responseFailure('submission_failed', 'Feedback could not be sent', status >= 500);
+}
+
+/** Clears a consumed attempt only when the server reports that its ID belongs to different content. */
+export function feedbackAttemptAfterFailure(
+  current: FeedbackSubmissionAttempt,
+  failure: FeedbackSubmissionFailure,
+): FeedbackSubmissionAttempt | null {
+  return failure.error.code === FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE ? null : current;
 }
 
 /** Retains one idempotency/correlation identity until its logical report is confirmed. */

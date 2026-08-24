@@ -9,6 +9,7 @@ export type FeedbackType =
 export type FeedbackEnvironment = 'development' | 'preview' | 'production';
 export type FeedbackPlatform = 'ios' | 'android' | 'web' | 'unknown';
 export type FeedbackNotificationStatus = 'not_configured' | 'pending' | 'sent' | 'failed' | 'digested';
+export const FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE = 'idempotency_payload_mismatch' as const;
 
 export interface FeedbackContextSnapshot {
   screen?: string;

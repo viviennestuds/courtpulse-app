@@ -11,6 +11,7 @@ import type {
   FeedbackFormInput,
   FeedbackPlatform,
   FeedbackSubmissionAttempt,
+  FeedbackSubmissionFailure,
   FeedbackSubmissionRequest,
   FeedbackSubmissionResponse,
   FeedbackSubmissionSuccess,
@@ -37,6 +38,19 @@ export interface FeedbackBackendDiagnostics {
 }
 
 export type SubmitFeedbackResult = FeedbackSubmissionResponse;
+
+/** Carries the bounded public feedback failure contract into React Query UI state. */
+export class FeedbackSubmissionError extends Error {
+  readonly code: string;
+  readonly retryable: boolean;
+
+  constructor(failure: FeedbackSubmissionFailure['error']) {
+    super(failure.message);
+    this.name = 'FeedbackSubmissionError';
+    this.code = failure.code;
+    this.retryable = failure.retryable;
+  }
+}
 
 function normalizedPlatform(): FeedbackPlatform {
   if (Platform.OS === 'ios' || Platform.OS === 'android' || Platform.OS === 'web') return Platform.OS;

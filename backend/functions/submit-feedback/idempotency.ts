@@ -1,7 +1,10 @@
+export const IDEMPOTENCY_PAYLOAD_MISMATCH = "idempotency_payload_mismatch";
+
 export interface PersistedFeedbackRecord {
   id: string;
   notification_status: string;
   sentry_event_id: string | null;
+  content_fingerprint: string;
 }
 
 export interface PersistenceAttempt<TRecord> {
@@ -15,9 +18,11 @@ export type IdempotentPersistenceResult<TRecord> =
 
 /**
  * Inserts before reading so PostgreSQL's unique submission_id constraint is the race-safe arbiter.
- * Only a unique violation takes the replay path; other persistence failures remain failures.
+ * Only a unique violation takes the replay path; matching fingerprints prove an equivalent retry.
+ * Other persistence failures and payload mismatches remain failures without mutating the first row.
  */
-export async function persistFeedbackIdempotently<TRecord>(
+export async function persistFeedbackIdempotently<TRecord extends PersistedFeedbackRecord>(
+  incomingContentFingerprint: string,
   insert: () => Promise<PersistenceAttempt<TRecord>>,
   loadExisting: () => Promise<PersistenceAttempt<TRecord>>,
 ): Promise<IdempotentPersistenceResult<TRecord>> {
@@ -32,6 +37,9 @@ export async function persistFeedbackIdempotently<TRecord>(
   const existing = await loadExisting();
   if (!existing.record) {
     return { ok: false, errorCode: existing.errorCode ?? "replay_record_unavailable" };
+  }
+  if (existing.record.content_fingerprint !== incomingContentFingerprint) {
+    return { ok: false, errorCode: IDEMPOTENCY_PAYLOAD_MISMATCH };
   }
   return { ok: true, record: existing.record, idempotentReplay: true };
 }

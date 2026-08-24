@@ -10,6 +10,7 @@ import {
   validateFeedbackSubmission,
 } from "./validation.ts";
 import {
+  IDEMPOTENCY_PAYLOAD_MISMATCH,
   persistFeedbackIdempotently,
   type PersistedFeedbackRecord,
   type PersistenceAttempt,
@@ -151,6 +152,8 @@ function persistedRecord(value: unknown): PersistedFeedbackRecord | null {
     || typeof record.notification_status !== "string"
     || !VALID_NOTIFICATION_STATUSES.includes(record.notification_status as NotificationStatus)
     || (record.sentry_event_id !== null && typeof record.sentry_event_id !== "string")
+    || typeof record.content_fingerprint !== "string"
+    || !/^[a-f0-9]{64}$/.test(record.content_fingerprint)
   ) {
     return null;
   }
@@ -158,6 +161,7 @@ function persistedRecord(value: unknown): PersistedFeedbackRecord | null {
     id: record.id,
     notification_status: record.notification_status,
     sentry_event_id: record.sentry_event_id as string | null,
+    content_fingerprint: record.content_fingerprint,
   };
 }
 
@@ -270,18 +274,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
     const persistence = await persistFeedbackIdempotently<PersistedFeedbackRecord>(
+      contentFingerprint,
       async (): Promise<PersistenceAttempt<PersistedFeedbackRecord>> => {
         const { data, error } = await supabase
           .from("feedback_reports")
           .insert(insertRow)
-          .select("id, notification_status, sentry_event_id")
+          .select("id, notification_status, sentry_event_id, content_fingerprint")
           .single();
         return { record: persistedRecord(data), errorCode: error?.code };
       },
       async (): Promise<PersistenceAttempt<PersistedFeedbackRecord>> => {
         const { data, error } = await supabase
           .from("feedback_reports")
-          .select("id, notification_status, sentry_event_id")
+          .select("id, notification_status, sentry_event_id, content_fingerprint")
           .eq("submission_id", payload.submissionId)
           .single();
         return { record: persistedRecord(data), errorCode: error?.code };
@@ -289,6 +294,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
     if (!persistence.ok) {
+      if (persistence.errorCode === IDEMPOTENCY_PAYLOAD_MISMATCH) {
+        return errorResponse(
+          req,
+          409,
+          IDEMPOTENCY_PAYLOAD_MISMATCH,
+          "This feedback attempt was already received with different content.",
+          false,
+        );
+      }
       console.error("[submit-feedback] persistence failed", persistence.errorCode);
       return errorResponse(req, 503, "persistence_unavailable", "Feedback could not be saved", true);
     }

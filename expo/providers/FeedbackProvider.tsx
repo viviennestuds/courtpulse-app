@@ -4,9 +4,9 @@ import { useMutation } from '@tanstack/react-query';
 import { usePathname } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
-import { hasFeedbackEndpoint, submitFeedbackForm } from '@/services/feedback';
+import { FeedbackSubmissionError, hasFeedbackEndpoint, submitFeedbackForm } from '@/services/feedback';
 import { captureFeedbackCorrelation } from '@/services/observability';
-import { ensureFeedbackSubmissionAttempt } from '@/utils/feedbackContract';
+import { ensureFeedbackSubmissionAttempt, feedbackAttemptAfterFailure } from '@/utils/feedbackContract';
 import type {
   FeedbackContextSnapshot,
   FeedbackFormInput,
@@ -87,7 +87,10 @@ export const [FeedbackProvider, useFeedback] = createContextHook(() => {
           flags: { channel, resolved, overrides },
           attempt,
         });
-        if (!result.ok) throw new Error(result.error.message);
+        if (!result.ok) {
+          pendingAttemptRef.current = feedbackAttemptAfterFailure(attempt, result);
+          throw new FeedbackSubmissionError(result.error);
+        }
         pendingAttemptRef.current = null;
         return result;
       } finally {

@@ -46,9 +46,12 @@ describe('feedback idempotency and server policy', () => {
   test('first submission inserts and repeated submission returns the same record', async () => {
     const records = new Map();
     let insertCount = 0;
+    let notificationCount = 0;
     const submissionId = '123e4567-e89b-42d3-a456-426614174000';
+    const contentFingerprint = 'a'.repeat(64);
 
     const persist = () => persistFeedbackIdempotently(
+      contentFingerprint,
       async () => {
         if (records.has(submissionId)) return { record: null, errorCode: '23505' };
         insertCount += 1;
@@ -56,6 +59,7 @@ describe('feedback idempotency and server policy', () => {
           id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
           notification_status: 'pending',
           sentry_event_id: '0123456789abcdef0123456789abcdef',
+          content_fingerprint: contentFingerprint,
         };
         records.set(submissionId, record);
         return { record };
@@ -67,15 +71,90 @@ describe('feedback idempotency and server policy', () => {
     const retry = await persist();
     expect(first).toMatchObject({ ok: true, idempotentReplay: false });
     expect(retry).toMatchObject({ ok: true, idempotentReplay: true });
-    if (first.ok && retry.ok) expect(retry.record.id).toBe(first.record.id);
+    if (first.ok) {
+      notificationCount += shouldAttemptImmediateNotification('immediate', first.idempotentReplay) ? 1 : 0;
+    }
+    if (retry.ok) {
+      expect(retry.record.id).toBe(first.ok ? first.record.id : undefined);
+      notificationCount += shouldAttemptImmediateNotification('immediate', retry.idempotentReplay) ? 1 : 0;
+    }
     expect(records.size).toBe(1);
     expect(insertCount).toBe(1);
+    expect(notificationCount).toBe(1);
+  });
+
+  test('accepts a duplicate ID when normalized content has the same fingerprint', async () => {
+    const base = validatedPayload();
+    const equivalent = {
+      ...base,
+      title: 'shot chart point wrong',
+      description: 'the plotted point is on the wrong side.',
+      context: { ...base.context, route: '/game/0042500117?different=true#summary' },
+    };
+    const originalFingerprint = await createContentFingerprint(base);
+    const equivalentFingerprint = await createContentFingerprint(equivalent);
+    const record = {
+      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      notification_status: 'pending',
+      sentry_event_id: '0123456789abcdef0123456789abcdef',
+      content_fingerprint: originalFingerprint,
+    };
+
+    const replay = await persistFeedbackIdempotently(
+      equivalentFingerprint,
+      async () => ({ record: null, errorCode: '23505' }),
+      async () => ({ record }),
+    );
+
+    expect(equivalentFingerprint).toBe(originalFingerprint);
+    expect(replay).toMatchObject({ ok: true, idempotentReplay: true, record: { id: record.id } });
+  });
+
+  test('rejects a duplicate ID with different content without overwrite, insertion, notification, or leakage', async () => {
+    const originalFingerprint = 'a'.repeat(64);
+    const incomingFingerprint = 'b'.repeat(64);
+    const originalRecord = {
+      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      notification_status: 'sent',
+      sentry_event_id: '0123456789abcdef0123456789abcdef',
+      content_fingerprint: originalFingerprint,
+      title: 'Original title',
+      description: 'Original description',
+    };
+    const storedRecord = structuredClone(originalRecord);
+    let insertedRows = 1;
+    let notificationCount = 1;
+
+    const mismatch = await persistFeedbackIdempotently(
+      incomingFingerprint,
+      async () => ({ record: null, errorCode: '23505' }),
+      async () => ({ record: storedRecord }),
+    );
+    if (mismatch.ok) {
+      insertedRows += 1;
+      notificationCount += shouldAttemptImmediateNotification('immediate', mismatch.idempotentReplay) ? 1 : 0;
+    }
+
+    expect(mismatch).toEqual({ ok: false, errorCode: 'idempotency_payload_mismatch' });
+    expect(storedRecord).toEqual(originalRecord);
+    expect(insertedRows).toBe(1);
+    expect(notificationCount).toBe(1);
+    expect(JSON.stringify(mismatch)).not.toContain(originalFingerprint);
+    expect(JSON.stringify(mismatch)).not.toContain(incomingFingerprint);
   });
 
   test('does not convert non-unique persistence errors into replay success', async () => {
     const result = await persistFeedbackIdempotently(
+      'a'.repeat(64),
       async () => ({ record: null, errorCode: '42501' }),
-      async () => ({ record: { id: 'must-not-load' } }),
+      async () => ({
+        record: {
+          id: 'must-not-load',
+          notification_status: 'pending',
+          sentry_event_id: null,
+          content_fingerprint: 'a'.repeat(64),
+        },
+      }),
     );
     expect(result).toEqual({ ok: false, errorCode: '42501' });
   });

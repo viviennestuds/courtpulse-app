@@ -17,7 +17,12 @@ import { X, Check, AlertTriangle, Send, MessageSquare } from 'lucide-react-nativ
 import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/providers/FeedbackProvider';
-import { FEEDBACK_TYPE_OPTIONS, FeedbackType } from '@/types/feedback';
+import { FeedbackSubmissionError } from '@/services/feedback';
+import {
+  FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE,
+  FEEDBACK_TYPE_OPTIONS,
+  FeedbackType,
+} from '@/types/feedback';
 import { useResponsiveLayout } from '@/components/ResponsiveLayout';
 
 export default function FeedbackSheet() {
@@ -98,6 +103,12 @@ export default function FeedbackSheet() {
   const displayError = useMemo(() => {
     if (validationError) return validationError;
     if (isError) {
+      if (
+        error instanceof FeedbackSubmissionError
+        && error.code === FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE
+      ) {
+        return error.message;
+      }
       return __DEV__ && error instanceof Error
         ? error.message
         : 'Feedback could not be sent. Please try again.';

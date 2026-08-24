@@ -3,9 +3,11 @@ import {
   buildFeedbackSentryContext,
   buildFeedbackSubmissionRequest,
   ensureFeedbackSubmissionAttempt,
+  feedbackAttemptAfterFailure,
   normalizeFeedbackEndpoint,
   parseFeedbackSubmissionResponse,
 } from '../utils/feedbackContract.ts';
+import { FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE } from '../types/feedback.ts';
 
 const runtime = {
   platform: 'web',
@@ -93,6 +95,30 @@ describe('CourtPulse feedback client contract', () => {
     }
   });
 
+  test('parses payload mismatch as a restrained typed 409 conflict without fingerprint leakage', () => {
+    const storedFingerprint = 'a'.repeat(64);
+    const incomingFingerprint = 'b'.repeat(64);
+    const result = parseFeedbackSubmissionResponse(409, {
+      ok: false,
+      error: {
+        code: FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE,
+        message: `private ${storedFingerprint} ${incomingFingerprint}`,
+        retryable: true,
+      },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE,
+        message: 'The earlier version of this report was already received. Submit again to send your edited version.',
+        retryable: false,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(storedFingerprint);
+    expect(JSON.stringify(result)).not.toContain(incomingFingerprint);
+  });
+
   test('sanitizes backend failures and rejects malformed success responses', () => {
     expect(parseFeedbackSubmissionResponse(503, {
       ok: false,
@@ -144,7 +170,61 @@ describe('CourtPulse feedback client contract', () => {
     expect(sentryCalls).toBe(1);
   });
 
-  test('keeps non-technical attempts Sentry-free', () => {
+  test('clears a mismatched technical attempt and creates new UUID and Sentry identity on the next press', () => {
+    const form = {
+      type: 'bug',
+      title: 'Edited title',
+      description: 'Edited description remains visible',
+    };
+    const oldAttempt = {
+      submissionId: '123e4567-e89b-42d3-a456-426614174000',
+      sentryEventId: '0123456789abcdef0123456789abcdef',
+    };
+    const mismatch = parseFeedbackSubmissionResponse(409, {
+      ok: false,
+      error: {
+        code: FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE,
+        message: 'server copy is not trusted',
+        retryable: false,
+      },
+    });
+    if (mismatch.ok) throw new Error('expected mismatch failure');
+
+    const retainedForm = form;
+    const clearedAttempt = feedbackAttemptAfterFailure(oldAttempt, mismatch);
+    let sentryCalls = 0;
+    const nextAttempt = ensureFeedbackSubmissionAttempt(
+      clearedAttempt,
+      form.type,
+      { screen: 'GameDetail', route: '/game/0042500117' },
+      () => '223e4567-e89b-42d3-a456-426614174000',
+      () => {
+        sentryCalls += 1;
+        return 'fedcba9876543210fedcba9876543210';
+      },
+    );
+
+    expect(retainedForm).toBe(form);
+    expect(clearedAttempt).toBeNull();
+    expect(nextAttempt.submissionId).not.toBe(oldAttempt.submissionId);
+    expect(nextAttempt.sentryEventId).not.toBe(oldAttempt.sentryEventId);
+    expect(sentryCalls).toBe(1);
+  });
+
+  test('retains the same attempt after a normal uncertain transport failure', () => {
+    const attempt = {
+      submissionId: '123e4567-e89b-42d3-a456-426614174000',
+      sentryEventId: '0123456789abcdef0123456789abcdef',
+    };
+    const timeout = parseFeedbackSubmissionResponse(503, {
+      ok: false,
+      error: { code: 'timeout', message: 'private transport detail', retryable: true },
+    });
+    if (timeout.ok) throw new Error('expected transport failure');
+    expect(feedbackAttemptAfterFailure(attempt, timeout)).toBe(attempt);
+  });
+
+  test('keeps non-technical attempts Sentry-free before and after mismatch reset', () => {
     let sentryCalls = 0;
     const attempt = ensureFeedbackSubmissionAttempt(
       null,
@@ -157,6 +237,43 @@ describe('CourtPulse feedback client contract', () => {
       },
     );
     expect(attempt.sentryEventId).toBeUndefined();
+    const categoryChangedRequest = buildFeedbackSubmissionRequest(
+      {
+        type: 'feature_request',
+        title: 'Edited feature request',
+        description: 'Changed from an earlier technical category',
+      },
+      { screen: 'Games' },
+      runtime,
+      attempt.submissionId,
+      '0123456789abcdef0123456789abcdef',
+    );
+    expect(categoryChangedRequest.sentryEventId).toBeUndefined();
+
+    const mismatch = parseFeedbackSubmissionResponse(409, {
+      ok: false,
+      error: {
+        code: FEEDBACK_IDEMPOTENCY_PAYLOAD_MISMATCH_CODE,
+        message: 'different content',
+        retryable: false,
+      },
+    });
+    if (mismatch.ok) throw new Error('expected mismatch failure');
+    const clearedAttempt = feedbackAttemptAfterFailure(attempt, mismatch);
+    const nextAttempt = ensureFeedbackSubmissionAttempt(
+      clearedAttempt,
+      'feature_request',
+      { screen: 'Games' },
+      () => '223e4567-e89b-42d3-a456-426614174000',
+      () => {
+        sentryCalls += 1;
+        return 'fedcba9876543210fedcba9876543210';
+      },
+    );
+
+    expect(clearedAttempt).toBeNull();
+    expect(nextAttempt.submissionId).not.toBe(attempt.submissionId);
+    expect(nextAttempt.sentryEventId).toBeUndefined();
     expect(sentryCalls).toBe(0);
   });
 
