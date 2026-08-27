@@ -13,6 +13,7 @@ import {
   IDEMPOTENCY_PAYLOAD_MISMATCH,
   persistFeedbackIdempotently,
   type PersistedFeedbackRecord,
+  type PersistedFeedbackReplayRecord,
   type PersistenceAttempt,
 } from "./idempotency.ts";
 
@@ -25,6 +26,18 @@ const VALID_NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
   "failed",
   "digested",
 ];
+const PERSISTED_RECORD_PROJECTION = "id, notification_status, sentry_event_id, content_fingerprint";
+const PERSISTED_REPLAY_PROJECTION = [
+  PERSISTED_RECORD_PROJECTION,
+  "category",
+  "title",
+  "description",
+  "expected_behavior",
+  "actual_behavior",
+  "repro_steps",
+  "reporter_name",
+  "reporter_contact",
+].join(", ");
 
 type JsonRecord = Record<string, unknown>;
 
@@ -144,6 +157,10 @@ function toInsertRow(
   };
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
 function persistedRecord(value: unknown): PersistedFeedbackRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -151,7 +168,7 @@ function persistedRecord(value: unknown): PersistedFeedbackRecord | null {
     typeof record.id !== "string"
     || typeof record.notification_status !== "string"
     || !VALID_NOTIFICATION_STATUSES.includes(record.notification_status as NotificationStatus)
-    || (record.sentry_event_id !== null && typeof record.sentry_event_id !== "string")
+    || !isNullableString(record.sentry_event_id)
     || typeof record.content_fingerprint !== "string"
     || !/^[a-f0-9]{64}$/.test(record.content_fingerprint)
   ) {
@@ -160,8 +177,37 @@ function persistedRecord(value: unknown): PersistedFeedbackRecord | null {
   return {
     id: record.id,
     notification_status: record.notification_status,
-    sentry_event_id: record.sentry_event_id as string | null,
+    sentry_event_id: record.sentry_event_id,
     content_fingerprint: record.content_fingerprint,
+  };
+}
+
+function persistedReplayRecord(value: unknown): PersistedFeedbackReplayRecord | null {
+  const persisted = persistedRecord(value);
+  if (!persisted || !value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.category !== "string"
+    || typeof record.title !== "string"
+    || typeof record.description !== "string"
+    || !isNullableString(record.expected_behavior)
+    || !isNullableString(record.actual_behavior)
+    || !isNullableString(record.repro_steps)
+    || !isNullableString(record.reporter_name)
+    || !isNullableString(record.reporter_contact)
+  ) {
+    return null;
+  }
+  return {
+    ...persisted,
+    category: record.category,
+    title: record.title,
+    description: record.description,
+    expected_behavior: record.expected_behavior,
+    actual_behavior: record.actual_behavior,
+    repro_steps: record.repro_steps,
+    reporter_name: record.reporter_name,
+    reporter_contact: record.reporter_contact,
   };
 }
 
@@ -273,23 +319,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       initialStatus,
     );
 
-    const persistence = await persistFeedbackIdempotently<PersistedFeedbackRecord>(
-      contentFingerprint,
+    const persistence = await persistFeedbackIdempotently(
+      payload,
       async (): Promise<PersistenceAttempt<PersistedFeedbackRecord>> => {
         const { data, error } = await supabase
           .from("feedback_reports")
           .insert(insertRow)
-          .select("id, notification_status, sentry_event_id, content_fingerprint")
+          .select(PERSISTED_RECORD_PROJECTION)
           .single();
         return { record: persistedRecord(data), errorCode: error?.code };
       },
-      async (): Promise<PersistenceAttempt<PersistedFeedbackRecord>> => {
+      async (): Promise<PersistenceAttempt<PersistedFeedbackReplayRecord>> => {
         const { data, error } = await supabase
           .from("feedback_reports")
-          .select("id, notification_status, sentry_event_id, content_fingerprint")
+          .select(PERSISTED_REPLAY_PROJECTION)
           .eq("submission_id", payload.submissionId)
           .single();
-        return { record: persistedRecord(data), errorCode: error?.code };
+        return { record: persistedReplayRecord(data), errorCode: error?.code };
       },
     );
 

@@ -17,6 +17,9 @@ function validRequest() {
     category: 'bug',
     title: '  Shot Chart   Point Wrong  ',
     description: ' The plotted point is on the wrong side. ',
+    expectedBehavior: 'The point appears at the recorded location',
+    actualBehavior: 'The point appears on the opposite side',
+    reproSteps: 'Open the game, then select the Shots tab',
     reporterName: 'Reporter A',
     reporterContact: 'reporter-a@example.com',
     context: {
@@ -36,35 +39,51 @@ function validRequest() {
   };
 }
 
-function validatedPayload() {
-  const result = validateFeedbackSubmission(validRequest());
+function validateRequest(request) {
+  const result = validateFeedbackSubmission(request);
   if (!result.ok || !result.value) throw new Error(result.error ?? 'validation failed');
   return result.value;
 }
 
+function validatedPayload() {
+  return validateRequest(validRequest());
+}
+
+function persistedRecordFrom(payload, overrides = {}) {
+  return {
+    id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    notification_status: 'pending',
+    sentry_event_id: payload.sentryEventId ?? null,
+    content_fingerprint: 'a'.repeat(64),
+    category: payload.category,
+    title: payload.title,
+    description: payload.description,
+    expected_behavior: payload.expectedBehavior ?? null,
+    actual_behavior: payload.actualBehavior ?? null,
+    repro_steps: payload.reproSteps ?? null,
+    reporter_name: payload.reporterName ?? null,
+    reporter_contact: payload.reporterContact ?? null,
+    ...overrides,
+  };
+}
+
 describe('feedback idempotency and server policy', () => {
-  test('first submission inserts and repeated submission returns the same record', async () => {
+  test('first submission and uncertain-timeout retry preserve one row, Sentry identity, and notification', async () => {
+    const payload = validatedPayload();
     const records = new Map();
     let insertCount = 0;
     let notificationCount = 0;
-    const submissionId = '123e4567-e89b-42d3-a456-426614174000';
-    const contentFingerprint = 'a'.repeat(64);
 
     const persist = () => persistFeedbackIdempotently(
-      contentFingerprint,
+      payload,
       async () => {
-        if (records.has(submissionId)) return { record: null, errorCode: '23505' };
+        if (records.has(payload.submissionId)) return { record: null, errorCode: '23505' };
         insertCount += 1;
-        const record = {
-          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-          notification_status: 'pending',
-          sentry_event_id: '0123456789abcdef0123456789abcdef',
-          content_fingerprint: contentFingerprint,
-        };
-        records.set(submissionId, record);
+        const record = persistedRecordFrom(payload);
+        records.set(payload.submissionId, record);
         return { record };
       },
-      async () => ({ record: records.get(submissionId) ?? null }),
+      async () => ({ record: records.get(payload.submissionId) ?? null }),
     );
 
     const first = await persist();
@@ -76,6 +95,7 @@ describe('feedback idempotency and server policy', () => {
     }
     if (retry.ok) {
       expect(retry.record.id).toBe(first.ok ? first.record.id : undefined);
+      expect(retry.record.sentry_event_id).toBe(payload.sentryEventId);
       notificationCount += shouldAttemptImmediateNotification('immediate', retry.idempotentReplay) ? 1 : 0;
     }
     expect(records.size).toBe(1);
@@ -83,25 +103,43 @@ describe('feedback idempotency and server policy', () => {
     expect(notificationCount).toBe(1);
   });
 
-  test('accepts a duplicate ID when normalized content has the same fingerprint', async () => {
-    const base = validatedPayload();
-    const equivalent = {
-      ...base,
-      title: 'shot chart point wrong',
-      description: 'the plotted point is on the wrong side.',
-      context: { ...base.context, route: '/game/0042500117?different=true#summary' },
-    };
-    const originalFingerprint = await createContentFingerprint(base);
-    const equivalentFingerprint = await createContentFingerprint(equivalent);
-    const record = {
-      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-      notification_status: 'pending',
-      sentry_event_id: '0123456789abcdef0123456789abcdef',
-      content_fingerprint: originalFingerprint,
-    };
+  test('accepts an identical complete user-authored report as a replay', async () => {
+    const payload = validatedPayload();
+    const record = persistedRecordFrom(payload, {
+      content_fingerprint: await createContentFingerprint(payload),
+    });
 
     const replay = await persistFeedbackIdempotently(
-      equivalentFingerprint,
+      payload,
+      async () => ({ record: null, errorCode: '23505' }),
+      async () => ({ record }),
+    );
+
+    expect(replay).toMatchObject({ ok: true, idempotentReplay: true, record: { id: record.id } });
+  });
+
+  test('accepts a normalization-equivalent complete report after canonical validation', async () => {
+    const base = validatedPayload();
+    const equivalent = validateRequest({
+      ...validRequest(),
+      title: `  ${base.title}  `,
+      description: `  ${base.description}  `,
+      expectedBehavior: `  ${base.expectedBehavior}  `,
+      actualBehavior: `  ${base.actualBehavior}  `,
+      reproSteps: `  ${base.reproSteps}  `,
+      reporterName: `  ${base.reporterName}  `,
+      reporterContact: `  ${base.reporterContact}  `,
+      context: {
+        ...validRequest().context,
+        route: '/game/0042500117?different=true#summary',
+      },
+    });
+    const originalFingerprint = await createContentFingerprint(base);
+    const equivalentFingerprint = await createContentFingerprint(equivalent);
+    const record = persistedRecordFrom(base, { content_fingerprint: originalFingerprint });
+
+    const replay = await persistFeedbackIdempotently(
+      equivalent,
       async () => ({ record: null, errorCode: '23505' }),
       async () => ({ record }),
     );
@@ -110,51 +148,105 @@ describe('feedback idempotency and server policy', () => {
     expect(replay).toMatchObject({ ok: true, idempotentReplay: true, record: { id: record.id } });
   });
 
-  test('rejects a duplicate ID with different content without overwrite, insertion, notification, or leakage', async () => {
-    const originalFingerprint = 'a'.repeat(64);
-    const incomingFingerprint = 'b'.repeat(64);
-    const originalRecord = {
-      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-      notification_status: 'sent',
-      sentry_event_id: '0123456789abcdef0123456789abcdef',
-      content_fingerprint: originalFingerprint,
-      title: 'Original title',
-      description: 'Original description',
-    };
-    const storedRecord = structuredClone(originalRecord);
-    let insertedRows = 1;
-    let notificationCount = 1;
+  const changedUserFields = [
+    ['category', 'performance'],
+    ['expectedBehavior', 'The chart should retain every point'],
+    ['actualBehavior', 'Chart disappeared after selecting Q4'],
+    ['reproSteps', 'Open the game, select Q4, then select Shots'],
+    ['reporterName', 'Reporter B'],
+    ['reporterContact', 'reporter-b@example.com'],
+    ['title', 'Shot chart vanished'],
+    ['description', 'The plotted point disappears after the quarter changes.'],
+  ];
 
-    const mismatch = await persistFeedbackIdempotently(
-      incomingFingerprint,
+  for (const [field, changedValue] of changedUserFields) {
+    test(`rejects a duplicate ID when only ${field} changes without mutation or notification`, async () => {
+      const originalPayload = validatedPayload();
+      const incomingPayload = { ...originalPayload, [field]: changedValue };
+      const originalRecord = persistedRecordFrom(originalPayload, {
+        notification_status: 'sent',
+        content_fingerprint: await createContentFingerprint(originalPayload),
+      });
+      const storedRecord = structuredClone(originalRecord);
+      let insertedRows = 1;
+      let notificationCount = 1;
+
+      const mismatch = await persistFeedbackIdempotently(
+        incomingPayload,
+        async () => ({ record: null, errorCode: '23505' }),
+        async () => ({ record: storedRecord }),
+      );
+      if (mismatch.ok) {
+        insertedRows += 1;
+        notificationCount += shouldAttemptImmediateNotification('immediate', mismatch.idempotentReplay) ? 1 : 0;
+      }
+
+      expect(mismatch).toEqual({ ok: false, errorCode: 'idempotency_payload_mismatch' });
+      expect(storedRecord).toEqual(originalRecord);
+      expect(insertedRows).toBe(1);
+      expect(notificationCount).toBe(1);
+      expect(JSON.stringify(mismatch)).not.toContain(originalPayload.reporterName);
+      expect(JSON.stringify(mismatch)).not.toContain(originalPayload.reporterContact);
+    });
+  }
+
+  test('treats absent validated optional values as equivalent to persisted NULL', async () => {
+    const request = validRequest();
+    delete request.expectedBehavior;
+    delete request.actualBehavior;
+    delete request.reproSteps;
+    delete request.reporterName;
+    delete request.reporterContact;
+    const payload = validateRequest(request);
+    const record = persistedRecordFrom(payload);
+
+    const replay = await persistFeedbackIdempotently(
+      payload,
       async () => ({ record: null, errorCode: '23505' }),
-      async () => ({ record: storedRecord }),
+      async () => ({ record }),
     );
-    if (mismatch.ok) {
-      insertedRows += 1;
-      notificationCount += shouldAttemptImmediateNotification('immediate', mismatch.idempotentReplay) ? 1 : 0;
-    }
 
-    expect(mismatch).toEqual({ ok: false, errorCode: 'idempotency_payload_mismatch' });
-    expect(storedRecord).toEqual(originalRecord);
-    expect(insertedRows).toBe(1);
-    expect(notificationCount).toBe(1);
-    expect(JSON.stringify(mismatch)).not.toContain(originalFingerprint);
-    expect(JSON.stringify(mismatch)).not.toContain(incomingFingerprint);
+    expect(record.expected_behavior).toBeNull();
+    expect(record.reporter_contact).toBeNull();
+    expect(replay).toMatchObject({ ok: true, idempotentReplay: true });
+  });
+
+  test('does not treat volatile technical context as user-authored replay identity', async () => {
+    const originalPayload = validatedPayload();
+    const retryPayload = {
+      ...originalPayload,
+      sentryEventId: 'fedcba9876543210fedcba9876543210',
+      context: {
+        ...originalPayload.context,
+        environment: 'production',
+        buildIdentifier: 'different-build',
+        route: '/players',
+        gameId: 'different-game',
+        filters: { team: 'away' },
+        featureContext: { enabledFlags: ['different_flag'] },
+      },
+    };
+    const record = persistedRecordFrom(originalPayload, {
+      content_fingerprint: await createContentFingerprint(originalPayload),
+    });
+
+    const replay = await persistFeedbackIdempotently(
+      retryPayload,
+      async () => ({ record: null, errorCode: '23505' }),
+      async () => ({ record }),
+    );
+
+    expect(await createContentFingerprint(retryPayload)).not.toBe(record.content_fingerprint);
+    expect(replay).toMatchObject({ ok: true, idempotentReplay: true });
+    if (replay.ok) expect(replay.record.sentry_event_id).toBe(originalPayload.sentryEventId);
   });
 
   test('does not convert non-unique persistence errors into replay success', async () => {
+    const payload = validatedPayload();
     const result = await persistFeedbackIdempotently(
-      'a'.repeat(64),
+      payload,
       async () => ({ record: null, errorCode: '42501' }),
-      async () => ({
-        record: {
-          id: 'must-not-load',
-          notification_status: 'pending',
-          sentry_event_id: null,
-          content_fingerprint: 'a'.repeat(64),
-        },
-      }),
+      async () => ({ record: persistedRecordFrom(payload, { id: 'must-not-load' }) }),
     );
     expect(result).toEqual({ ok: false, errorCode: '42501' });
   });
@@ -206,6 +298,9 @@ describe('feedback content fingerprint', () => {
     const changedIdentity = {
       ...base,
       submissionId: '223e4567-e89b-42d3-a456-426614174000',
+      expectedBehavior: 'A different expected result',
+      actualBehavior: 'A different actual result',
+      reproSteps: 'A different sequence of steps',
       reporterName: 'Reporter B',
       reporterContact: 'reporter-b@example.com',
       sentryEventId: 'fedcba9876543210fedcba9876543210',
