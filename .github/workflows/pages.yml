@@ -36,6 +36,7 @@ jobs:
         env:
           EXPO_PUBLIC_FEEDBACK_ENDPOINT: ${{ vars.EXPO_PUBLIC_FEEDBACK_ENDPOINT }}
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
+          EXPO_PUBLIC_FEATURE_PROFILE: ${{ vars.EXPO_PUBLIC_FEATURE_PROFILE }}
         run: bunx expo export --platform web
 
       - name: Add GitHub Pages SPA fallback
