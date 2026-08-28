@@ -25,15 +25,12 @@
       "package": "app.rork.c7f613zdpvljnbn5oohj0"
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "output": "single",
+      "bundler": "metro"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://rork.com/"
-        }
-      ],
+      "expo-router",
       "expo-font",
       "expo-web-browser",
       [
@@ -46,7 +43,8 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/courtpulse-app"
     }
   }
 }
