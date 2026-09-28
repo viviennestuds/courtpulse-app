@@ -1,7 +1,9 @@
 # CourtPulse Non-Goals
 
-**Status:** PROPOSED  
-**Authority:** Scope-control proposal pending independent review and explicit acceptance
+**Status:** ACCEPTED  
+**Acceptance date:** 2026-09-28  
+**Accepted proposal:** `70724d8cca219f860ade9d8de9c37eed6626db5e`  
+**Authority:** project-owner acceptance
 
 These non-goals are intended to stop Foundation 0.1 from becoming a disguised implementation phase.
 
@@ -34,7 +36,7 @@ Current implementation accidents should not be frozen automatically, but neither
 
 Archaeology established that words such as `canonical`, `fallback`, `live`, `source`, `validated`, and `trusted` are overloaded.
 
-The proposed response is to require precision in material new decisions, not to rename every historical identifier.
+The accepted response is to require precision in material new decisions, not to rename every historical identifier.
 
 ## The Foundation is not evidence that future phases are accepted
 

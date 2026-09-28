@@ -1,7 +1,9 @@
 # CourtPulse Knowledge Layer
 
-**Status:** PROPOSED knowledge semantics  
-**Authority:** Descriptive/evidentiary; this file does not itself authorize production behavior
+**Status:** ACCEPTED knowledge semantics  
+**Acceptance date:** 2026-09-28  
+**Accepted proposal:** `70724d8cca219f860ade9d8de9c37eed6626db5e`  
+**Authority:** project-owner acceptance for knowledge methodology; descriptive/evidentiary content does not itself authorize production behavior
 
 ## Purpose
 

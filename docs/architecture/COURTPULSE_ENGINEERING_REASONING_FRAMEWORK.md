@@ -1,14 +1,16 @@
 # CourtPulse Engineering Reasoning Framework
 
-**Status:** PROPOSED  
-**Authority:** Methodology proposal pending independent review and explicit acceptance  
+**Status:** ACCEPTED  
+**Acceptance date:** 2026-09-28  
+**Accepted proposal:** `70724d8cca219f860ade9d8de9c37eed6626db5e`  
+**Authority:** project-owner acceptance  
 **Proposal baseline:** `e92dc3dcbf15c2ff4ce6681fa87e18022766d4c2`
 
 ## Purpose
 
 CourtPulse has accumulated mature application behavior, source-specific contracts, derived analytics, hosted-web behavior, and external deployment state. Material changes increasingly depend on knowing not only how the code works, but what the evidence actually proves and what the project has authorized.
 
-This framework proposes a lightweight discipline for that work. It is adapted to CourtPulse's present engineering needs; it is not a mechanical copy of another project's document structure.
+This framework establishes the accepted lightweight discipline for that work. It is adapted to CourtPulse's present engineering needs; it is not a mechanical copy of another project's document structure.
 
 ## 1. Two lanes
 
@@ -322,7 +324,7 @@ For CourtPulse-owned production behavior, distinguish:
 
 Do not use `reconstructible` or `reproducible` as shorthand for all of these unless the evidence actually supports all of them.
 
-## 13. Proposed workflow for material work
+## 13. Workflow for material work
 
 For a material phase:
 
@@ -365,7 +367,7 @@ Existing accepted or frozen contracts remain authoritative within their admitted
 - their scope is intentionally reopened; or
 - a later accepted contract explicitly supersedes them.
 
-New material work should follow the currently accepted methodology once that methodology itself is accepted.
+New material work should follow this accepted methodology unless it is later amended or superseded through the decision process defined here.
 
 Methodology artifacts should be created only when they solve a recurring recovery, reasoning, review, or authority problem. Do not create registries, schemas, templates, or governance layers merely because the framework has a name for a concept.
 

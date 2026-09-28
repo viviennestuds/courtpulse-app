@@ -1,7 +1,9 @@
 # CourtPulse Roadmap
 
-**Status:** PROPOSED  
-**Authority:** Sequencing and scope proposal pending independent review and explicit acceptance  
+**Status:** ACCEPTED  
+**Acceptance date:** 2026-09-28  
+**Accepted proposal:** `70724d8cca219f860ade9d8de9c37eed6626db5e`  
+**Authority:** project-owner acceptance  
 **Proposal baseline:** `e92dc3dcbf15c2ff4ce6681fa87e18022766d4c2`
 
 This roadmap separates **sequence** from **implementation authority**. Placement in a future phase does not authorize the work by itself. Each material phase still requires an exact admission before production behavior changes.
@@ -12,13 +14,13 @@ This roadmap separates **sequence** from **implementation authority**. Placement
 
 Repository Archaeology 0.1 has been independently reviewed and accepted as the evidentiary baseline, subject to documented reviewer amendments.
 
-### Current proposal scope
+### Accepted scope
 
 Foundation 0.1 is documentation-only:
 
 - establish a navigable root project entry point;
-- propose foundational architecture invariants;
-- propose the CourtPulse engineering reasoning framework;
+- establish foundational architecture invariants;
+- establish the CourtPulse engineering reasoning framework;
 - establish roadmap and non-goal boundaries;
 - establish knowledge/evidence semantics;
 - preserve Archaeology 0.1 as durable repository evidence;
@@ -26,11 +28,11 @@ Foundation 0.1 is documentation-only:
 
 ### Foundation 0.1 completion gate
 
-Foundation 0.1 is not complete merely when these files exist.
+Foundation 0.1 became accepted only after independent review and explicit project-owner acceptance of proposal `70724d8cca219f860ade9d8de9c37eed6626db5e`.
 
-The complete proposal must receive independent review, followed by explicit project acceptance before any normative document is promoted from **PROPOSED** to accepted/canonical authority.
+That acceptance grants the normative Foundation documents authority within their stated boundaries. It does not create any production implementation admission.
 
-No production-code correction belongs in this gate.
+No production-code correction belongs in the Foundation 0.1 acceptance boundary.
 
 ## Web 0.3B — Source, fallback, and analytics trust hardening
 

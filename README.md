@@ -6,11 +6,15 @@ This root README is an orientation and navigation document. It is **not** itself
 
 ## Foundation status
 
-CourtPulse is currently establishing a repository-level engineering foundation after Repository Archaeology 0.1.
+CourtPulse Foundation 0.1 is **ACCEPTED**.
 
-The documents introduced by the Foundation 0.1 branch are **PROPOSED** unless a document explicitly says otherwise. They do not become canonical or accepted merely because they exist in the repository. Independent review and explicit acceptance are required before proposed normative rules gain authority.
+Acceptance date: `2026-09-28`  
+Accepted proposal: `70724d8cca219f860ade9d8de9c37eed6626db5e`  
+Authority: project-owner acceptance
 
-The historical Archaeology 0.1 report is evidence, not normative architecture.
+This acceptance establishes the repository-level engineering discipline and sequencing boundaries described by the accepted Foundation documents. It does **not** create a production implementation admission for Web 0.3B or any other future phase.
+
+The historical Archaeology 0.1 report remains evidence, not normative architecture.
 
 ## Repository map
 
@@ -19,11 +23,11 @@ The historical Archaeology 0.1 report is evidence, not normative architecture.
 - `backend/functions/submit-feedback/` — repository-backed source for the deployed feedback Edge Function.
 - `backend/supabase/migrations/` — database migrations currently represented in Git.
 - `.github/workflows/pages.yml` — GitHub Pages export/deploy workflow.
-- `docs/` — proposed governance, roadmap, and knowledge layer.
+- `docs/` — accepted governance/methodology, roadmap, and knowledge layer.
 
 ## Foundation documents
 
-### Proposed normative documents
+### Accepted normative documents
 
 - [Architecture Contract V1](docs/architecture/COURTPULSE_ARCHITECTURE_CONTRACT_V1.md)
 - [Engineering Reasoning Framework](docs/architecture/COURTPULSE_ENGINEERING_REASONING_FRAMEWORK.md)
@@ -47,4 +51,4 @@ Repository code, runtime observations, tests, HARs, upstream responses, and depl
 
 Conversely, a proposed architecture rule is not true merely because it was written down. It gains authority only through the project's review and acceptance process.
 
-See the proposed Engineering Reasoning Framework for the complete model.
+See the accepted Engineering Reasoning Framework for the complete model.

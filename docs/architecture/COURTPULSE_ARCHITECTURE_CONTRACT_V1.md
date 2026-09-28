@@ -1,15 +1,17 @@
 # CourtPulse Architecture Contract V1
 
-**Status:** PROPOSED  
-**Authority:** Normative proposal pending independent review and explicit acceptance  
+**Status:** ACCEPTED  
+**Acceptance date:** 2026-09-28  
+**Accepted proposal:** `70724d8cca219f860ade9d8de9c37eed6626db5e`  
+**Authority:** project-owner acceptance  
 **Proposal baseline:** `e92dc3dcbf15c2ff4ce6681fa87e18022766d4c2`  
 **Archaeology basis:** CourtPulse Repository Archaeology 0.1
 
 ## Purpose
 
-This document proposes the minimum foundational invariants needed for future material CourtPulse work. It does not canonize the current implementation. It does not authorize production-code changes by itself.
+This document establishes the accepted minimum foundational invariants for future material CourtPulse work. It does not canonize the current implementation. It does not authorize production-code changes by itself.
 
-Repository Archaeology 0.1 established evidence about current CourtPulse behavior and recoverability. Those findings explain why these rules are being proposed; they do not make the rules accepted automatically.
+Repository Archaeology 0.1 established evidence about current CourtPulse behavior and recoverability. Those findings motivated the proposal; project-owner acceptance of the reviewed proposal grants this document its normative authority.
 
 ## AC-01 — Evidence and authority are separate lanes
 
@@ -132,9 +134,7 @@ It does not imply that retrieving current deployed source alone proves complete 
 
 ## Change and acceptance
 
-While this document remains **PROPOSED**, none of the invariants above should be treated as frozen project authority.
-
-Promotion to accepted/canonical authority requires independent review and explicit acceptance. The durable acceptance mechanism and decision-state meanings are defined in the proposed CourtPulse Engineering Reasoning Framework.
+This document is **ACCEPTED** at the reviewed proposal identified above. The durable acceptance mechanism and decision-state meanings are defined in the accepted CourtPulse Engineering Reasoning Framework.
 
 Material later amendments should preserve the distinction between:
 
