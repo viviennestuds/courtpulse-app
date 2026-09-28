@@ -115,47 +115,30 @@ A feature flag, route, experiment, visual surface, or successful rendering state
 
 Likewise, a successful request, a passing test, or a deployed function does not independently establish that its behavior is desirable or release-authorized.
 
-## AC-10 — Test roles are semantic, not historical
+## AC-10 — CourtPulse-owned production behavior must be recoverable through governed artifacts
 
-A test's role is determined by what accepted requirement or evidence question it serves.
-
-The mere existence of a green test does not make it an acceptance test or regression test.
-
-A characterization or probe can later become regression protection when the corresponding behavior is explicitly accepted. That transition must be intentional.
-
-## AC-11 — CourtPulse-owned production behavior must be recoverable through governed artifacts
-
-CourtPulse-owned executable logic required to satisfy an admitted production contract should be recoverable from version-controlled source or another explicitly governed reproducible artifact.
+CourtPulse-owned executable logic required to satisfy an admitted production contract **must** be recoverable from version-controlled source or another explicitly governed reproducible artifact to the extent required to reconstruct that CourtPulse-owned behavior.
 
 This proposed invariant distinguishes:
 
 - **CourtPulse-owned executable logic:** version-controlled or governed reproducibly;
-- **non-secret deployment configuration:** reconstructible and documented to the extent required by the contract;
+- **non-secret deployment configuration:** reconstructible and documented to the extent required by the admitted contract;
 - **secrets and credentials:** intentionally external to source control;
 - **third-party provider internals:** external dependencies, not CourtPulse artifacts.
 
-This rule is about recoverability and authority, not one mandatory hosting platform or directory layout.
+This rule is about recoverability and authority, not one mandatory hosting platform, repository layout, or deployment provider.
 
 It does not imply that retrieving current deployed source alone proves complete deployment reproducibility.
-
-## AC-12 — New methodology is prospective by default
-
-Adopting a stronger reasoning or governance framework does not automatically reopen every previously accepted CourtPulse decision.
-
-Existing accepted or frozen contracts remain evidence and authority within their admitted scope unless:
-
-- new evidence creates a material conflict;
-- their scope is intentionally reopened; or
-- a later accepted contract supersedes them.
-
-New material work should follow the current accepted framework once that framework itself is accepted.
 
 ## Change and acceptance
 
 While this document remains **PROPOSED**, none of the invariants above should be treated as frozen project authority.
 
-Promotion to accepted/canonical authority requires independent review and explicit acceptance. Material later amendments should preserve the distinction between:
+Promotion to accepted/canonical authority requires independent review and explicit acceptance. The durable acceptance mechanism and decision-state meanings are defined in the proposed CourtPulse Engineering Reasoning Framework.
+
+Material later amendments should preserve the distinction between:
 
 - evidence that motivates a change;
-- the proposal itself; and
-- the acceptance that grants authority.
+- the proposal itself;
+- the acceptance that grants authority; and
+- any separate implementation admission.

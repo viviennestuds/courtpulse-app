@@ -115,9 +115,10 @@ For deployed `submit-feedback` v7:
 - implementation source is checked in;
 - all three deployed source files matched Git exactly after newline normalization;
 - the database migration is checked in;
-- the expected environment surface is documented in repository configuration/examples.
+- the application-specific environment surface is documented in repository configuration/examples;
+- Supabase-provided runtime variables, including `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, are referenced in function source and supplied externally by the platform.
 
-Actual secret values and complete control-plane state remain external by design.
+Actual application-specific secret values, Supabase-provided runtime values, and complete control-plane state remain external by design.
 
 The appropriate characterization is **substantially repository-backed implementation authority**, not “the full live deployment can be reproduced from Git alone.”
 

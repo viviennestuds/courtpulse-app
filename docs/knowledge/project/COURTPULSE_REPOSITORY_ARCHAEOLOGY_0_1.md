@@ -118,14 +118,15 @@ Do not broaden this to “the full deployment is operationally recoverable.” S
 
 All three deployed `submit-feedback` v7 files matched their Git counterparts exactly after newline normalization.
 
-The repository also contained the feedback database migration and documented environment surface.
+The repository also contained the feedback database migration.
 
 The correct characterization is:
 
 - implementation source: repository-backed;
 - database schema intent: represented;
-- expected environment surface: documented;
-- actual secrets/runtime values: external by design;
+- application-specific environment surface: documented in repository configuration/examples;
+- Supabase-provided runtime environment, including `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`: referenced in function source and supplied externally by the platform;
+- actual secret/runtime values: external by design;
 - exact control-plane state: not wholly Git-owned.
 
 Therefore `submit-feedback` is substantially repository-backed, not proof that the full deployed system is reproducible from Git alone.
