@@ -95,7 +95,7 @@ Where downstream behavior depends on the distinction, Candidate A must preserve 
 
 ### CA-03 — Failure must remain distinguishable from authoritative empty
 
-For active Web Beta consumers identified as in scope by Candidate A evidence/admission, source unavailability, transport failure, invalid response, incompatible capability, or untrusted acquisition must not be represented as a legitimate empty-domain result unless the relevant contract establishes that the queried domain is genuinely empty.
+For active Web Beta consumers identified as in scope by Candidate A evidence/admission, source unavailability, transport failure, invalid response, incompatible capability, or acquisition that does not satisfy the applicable admitted source/capability contract must not be represented as a legitimate empty-domain result unless the relevant contract establishes that the queried domain is genuinely empty.
 
 Examples from the evidence baseline include states such as an existing player being rendered as `Player not found` solely because an acquisition path failed, or a failed playoff catalog being rendered as though no playoff series exist.
 
@@ -124,7 +124,7 @@ Candidate A evidence about current active product behavior does not convert that
 Each active Web Beta capability identified as in scope by a later admission must be explicitly dispositioned through one of the following outcomes:
 
 1. preserve it through an admitted CourtPulse-controlled source/contract;
-2. replace it with an admitted equivalent capability;
+2. replace it with an admitted replacement capability that satisfies the accepted product requirement;
 3. intentionally reduce capability or make it unavailable; or
 4. explicitly retire it through product authority.
 
