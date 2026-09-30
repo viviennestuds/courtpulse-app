@@ -1,25 +1,26 @@
-# Web 0.3B Candidate A1 — Playoffs Failure vs Authoritative Empty Admission Proposal
+# Web 0.3B Candidate A1 — Playoffs Failure vs Authoritative Empty Admission
 
-**Status:** PROPOSED  
-**Target decision state if accepted:** ADMITTED  
+**Status:** ADMITTED  
+**Admission date:** 2026-09-30  
+**Admitted proposal:** `fe86dab40ed9ed62cc6dd6a15b7cd58f6f964e57`  
 **Proposal date:** 2026-09-30  
 **Repository baseline:** `900a0fb5e0c0e4950f479b7a379915f21cb4f307`  
 **Control-plane evidence:** deployed `nba-data-proxy` v33 observed 2026-09-30  
-**Authority:** proposal only; no A1 production change is ADMITTED
+**Authority:** project-owner admission
 
-## Decision sought
+## Admitted decision
 
-This document proposes the first exact production admission under the accepted Web 0.3B Candidate A responsibility.
+This document records the first exact production admission under the accepted Web 0.3B Candidate A responsibility.
 
-The decision is intentionally narrow:
+The admitted decision is intentionally narrow:
 
-> For the active Web Beta Playoffs capability, should CourtPulse admit a client-only correction that prevents failed, incompatible, or zero-result playoff-catalog acquisition from being presented as authoritative emptiness when the current backend contract cannot prove that emptiness?
+> For the active Web Beta Playoffs capability, CourtPulse admits a client-only correction that prevents failed, incompatible, or zero-result playoff-catalog acquisition from being presented as authoritative emptiness when the current backend contract cannot prove that emptiness.
 
-If this proposal is independently reviewed and explicitly accepted by the project owner, the production behavior defined in **Proposed admitted behavior** becomes **ADMITTED** for implementation within the stated scope and non-goals.
+The production behavior defined in **Admitted behavior** is **ADMITTED** for implementation within the stated scope and non-goals.
 
-Acceptance of this proposal would not itself mean the implementation is IMPLEMENTED, VALIDATED, RELEASE-ACCEPTED, or FROZEN.
+This admission does not itself mean the implementation is IMPLEMENTED, VALIDATED, RELEASE-ACCEPTED, or FROZEN.
 
-## Accepted authority this proposal depends on
+## Accepted authority this admission depends on
 
 Candidate A already establishes that:
 
@@ -53,9 +54,9 @@ The A1 evidence review therefore establishes:
 
 This proposal does not redefine `noGamesConfirmed` and does not infer source equivalence from zero results.
 
-## Proposed admitted behavior
+## Admitted behavior
 
-If accepted, A1 authorizes the following production behavior for the **active Web Beta Playoffs capability only**.
+A1 authorizes the following production behavior for the **active Web Beta Playoffs capability only**.
 
 ### A1-01 — Classify Playoffs acquisition before bracket construction
 
@@ -116,7 +117,7 @@ The Playoffs surface must present an explicit unavailable/error state when A1 cl
 
 A1 does not prescribe exact visual styling or copy. Reusing or minimally adapting the existing Playoffs acquisition-error presentation is allowed if it truthfully represents unavailability and cannot be confused with authoritative empty.
 
-## Authorized implementation boundary if admitted
+## Authorized implementation boundary
 
 A1 authorizes a **client-only, Playoffs-specific** implementation sufficient to satisfy A1-01 through A1-06.
 
@@ -237,9 +238,9 @@ This alternative is **deferred**. It is not part of A1.
 
 Because it would modify CourtPulse-owned backend behavior, a future admission would also have to resolve the accepted AC-10 recoverability requirement before RELEASE-ACCEPTED.
 
-## Proposed implementation state sequence
+## Admission state sequence
 
-If this proposal is accepted:
+The admitted state sequence is:
 
 ```text
 A1 evidence / investigation
@@ -262,12 +263,10 @@ Implementation should begin only after the repository contains the durable admis
 
 ## Admission boundary
 
-If explicitly accepted, this proposal admits only the behavior in A1-01 through A1-06 and the client-only implementation boundary above.
+This admission authorizes only the behavior in A1-01 through A1-06 and the client-only implementation boundary above.
 
 It does not grant authority to broaden A1 during implementation for convenience.
 
 Any material need to modify backend source semantics, generic proxy behavior, source selection, bracket semantics, security policy, or another Candidate A capability must return to the appropriate evidence/authority cycle.
 
-Until project-owner acceptance is recorded durably in the repository:
-
-**No A1 production change is ADMITTED.**
+**A1 production behavior is ADMITTED within the scope above. A1 implementation is not yet IMPLEMENTED, validation is not yet VALIDATED, and release is not yet RELEASE-ACCEPTED.**
