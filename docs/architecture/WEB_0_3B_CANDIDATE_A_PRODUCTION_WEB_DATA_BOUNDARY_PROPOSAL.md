@@ -1,20 +1,18 @@
 # Web 0.3B Candidate A — Production Web Data Boundary Responsibility Proposal
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED  
+**Acceptance date:** 2026-09-29  
+**Accepted proposal:** `b41ee01e3f9d0e0ee77dfbabaaf42150a8b0bd06`  
 **Proposal date:** 2026-09-29  
 **Repository baseline:** `abc626e7391ff611fe18ebd1bb151c9382c4fb13`  
 **Control-plane observation:** 2026-09-29  
-**Authority:** proposal only; no production change is ADMITTED
+**Authority:** project-owner acceptance; no production change is ADMITTED
 
-## Decision sought
+## Accepted responsibility
 
-This document proposes the responsibility boundary for Web 0.3B Candidate A.
+This document establishes the accepted responsibility boundary for Web 0.3B Candidate A.
 
-If accepted, it would govern the scope and semantics of later Candidate A admissions. Acceptance of this responsibility would **not** itself authorize application, backend, Edge Function, deployment, feature-flag, security-policy, or analytics implementation changes.
-
-The narrow reviewer question is:
-
-> Does this responsibility grant Candidate A only the authority required to govern production-web acquisition, fallback, provenance, capability, freshness, and truthful failure/presentation semantics without absorbing security policy, production-recovery implementation, or Candidate B derived-analytics trust?
+It governs the scope and semantics of later Candidate A admissions. Acceptance of this responsibility does **not** itself authorize application, backend, Edge Function, deployment, feature-flag, security-policy, or analytics implementation changes.
 
 ## Evidence basis
 
@@ -209,9 +207,9 @@ This proposal does not:
 
 ## Acceptance boundary
 
-If this proposal is accepted, the accepted authority would be limited to the Candidate A responsibility and minimum contract above.
+The accepted authority is limited to the Candidate A responsibility and minimum contract above.
 
-It would establish what a later Candidate A implementation must respect, but would leave the following unresolved until separate admission:
+It establishes what a later Candidate A implementation must respect, but leaves the following unresolved until separate admission:
 
 - the first exact active Web Beta capability to change;
 - whether one admission may cover several related false-empty/provenance paths or whether they should be sequenced separately;
@@ -222,4 +220,4 @@ It would establish what a later Candidate A implementation must respect, but wou
 - validation evidence required for a specific implementation; and
 - release acceptance.
 
-No production change is ADMITTED by this proposal.
+No production change is ADMITTED by this acceptance.
