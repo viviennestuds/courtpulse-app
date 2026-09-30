@@ -1,7 +1,7 @@
 # Web 0.3B Candidate A1 — Playoffs Failure vs Authoritative Empty Admission Proposal
 
 **Status:** PROPOSED  
-**Proposed decision state:** ADMITTED  
+**Target decision state if accepted:** ADMITTED  
 **Proposal date:** 2026-09-30  
 **Repository baseline:** `900a0fb5e0c0e4950f479b7a379915f21cb4f307`  
 **Control-plane evidence:** deployed `nba-data-proxy` v33 observed 2026-09-30  
