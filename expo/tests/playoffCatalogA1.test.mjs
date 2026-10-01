@@ -20,9 +20,9 @@ function game(gameId = '0042500111') {
   };
 }
 
-function series(games) {
+function series(games, seriesKey = '1-2') {
   return {
-    seriesKey: '1-2',
+    seriesKey,
     gameCount: games.length,
     games,
   };
@@ -71,6 +71,90 @@ describe('Candidate A1 playoff catalog acquisition classification', () => {
       }
     },
   );
+
+
+  test('accepts a valid populated multi-series catalog with exact unique membership', () => {
+    const games = [
+      game('0042500111'),
+      game('0042500112'),
+      game('0042500211'),
+    ];
+    const seriesList = [
+      series(games.slice(0, 2), 'series-a'),
+      series([games[2]], 'series-b'),
+    ];
+    const result = classifyPlayoffCatalogAcquisition({
+      ...populatedCatalog(),
+      playoffGameCount: games.length,
+      seriesCount: seriesList.length,
+      games,
+      series: seriesList,
+    });
+    expect(result.state).toBe('usable');
+  });
+
+  test('rejects a top-level game not referenced by any series', () => {
+    const games = [game('0042500111'), game('0042500112')];
+    const result = classifyPlayoffCatalogAcquisition({
+      ...populatedCatalog(),
+      playoffGameCount: games.length,
+      games,
+      series: [series([games[0]])],
+    });
+    expect(result).toMatchObject({ state: 'unavailable', reason: 'incompatiblePayload' });
+  });
+
+  test('rejects duplicate top-level game IDs', () => {
+    const duplicateGame = game('0042500111');
+    const games = [duplicateGame, { ...duplicateGame }];
+    const result = classifyPlayoffCatalogAcquisition({
+      ...populatedCatalog(),
+      playoffGameCount: games.length,
+      games,
+      series: [series(games)],
+    });
+    expect(result).toMatchObject({ state: 'unavailable', reason: 'incompatiblePayload' });
+  });
+
+  test('rejects duplicate game membership within a series', () => {
+    const topLevelGame = game('0042500111');
+    const result = classifyPlayoffCatalogAcquisition({
+      ...populatedCatalog(),
+      games: [topLevelGame],
+      series: [series([topLevelGame, { ...topLevelGame }])],
+    });
+    expect(result).toMatchObject({ state: 'unavailable', reason: 'incompatiblePayload' });
+  });
+
+  test('rejects a game assigned to two different series', () => {
+    const sharedGame = game('0042500111');
+    const seriesList = [
+      series([sharedGame], 'series-a'),
+      series([{ ...sharedGame }], 'series-b'),
+    ];
+    const result = classifyPlayoffCatalogAcquisition({
+      ...populatedCatalog(),
+      seriesCount: seriesList.length,
+      series: seriesList,
+    });
+    expect(result).toMatchObject({ state: 'unavailable', reason: 'incompatiblePayload' });
+  });
+
+  test('rejects duplicate series keys', () => {
+    const games = [game('0042500111'), game('0042500211')];
+    const seriesList = [
+      series([games[0]], 'duplicate-key'),
+      series([games[1]], 'duplicate-key'),
+    ];
+    const result = classifyPlayoffCatalogAcquisition({
+      ...populatedCatalog(),
+      playoffGameCount: games.length,
+      seriesCount: seriesList.length,
+      games,
+      series: seriesList,
+    });
+    expect(result).toMatchObject({ state: 'unavailable', reason: 'incompatiblePayload' });
+  });
 
   test.each([
     [{ success: false, type: 'playoffCatalog', clientErrorCategory: 'network' }, 'network'],
