@@ -120,17 +120,68 @@ export function classifyPlayoffCatalogAcquisition(payload: unknown): PlayoffCata
     };
   }
 
-  const gameIds = new Set(games.map(game => String((game as Record<string, unknown>).gameId)));
+  const topLevelGameIds = games.map(game => String((game as Record<string, unknown>).gameId));
+  const gameIds = new Set(topLevelGameIds);
+
+  if (gameIds.size !== topLevelGameIds.length) {
+    return {
+      state: 'unavailable',
+      reason: 'incompatiblePayload',
+      message: 'Playoff catalog contains duplicate top-level games',
+    };
+  }
+
+  const seriesKeys = new Set<string>();
+  const assignedGameIds = new Set<string>();
 
   for (const rawSeries of series) {
-    const seriesGames = (rawSeries as Record<string, unknown>).games as unknown[];
-    if (!seriesGames.every(game => gameIds.has(String((game as Record<string, unknown>).gameId)))) {
+    const seriesRecord = rawSeries as Record<string, unknown>;
+    const seriesKey = String(seriesRecord.seriesKey);
+    const seriesGames = seriesRecord.games as unknown[];
+
+    if (seriesKeys.has(seriesKey)) {
       return {
         state: 'unavailable',
         reason: 'incompatiblePayload',
-        message: 'Playoff series references games outside the catalog',
+        message: 'Playoff catalog contains duplicate series keys',
       };
     }
+    seriesKeys.add(seriesKey);
+
+    const localGameIds = new Set<string>();
+    for (const rawGame of seriesGames) {
+      const gameId = String((rawGame as Record<string, unknown>).gameId);
+
+      if (!gameIds.has(gameId)) {
+        return {
+          state: 'unavailable',
+          reason: 'incompatiblePayload',
+          message: 'Playoff series references games outside the catalog',
+        };
+      }
+
+      if (localGameIds.has(gameId) || assignedGameIds.has(gameId)) {
+        return {
+          state: 'unavailable',
+          reason: 'incompatiblePayload',
+          message: 'Playoff catalog contains duplicate series game membership',
+        };
+      }
+
+      localGameIds.add(gameId);
+      assignedGameIds.add(gameId);
+    }
+  }
+
+  if (
+    assignedGameIds.size !== gameIds.size
+    || !topLevelGameIds.every(gameId => assignedGameIds.has(gameId))
+  ) {
+    return {
+      state: 'unavailable',
+      reason: 'incompatiblePayload',
+      message: 'Playoff catalog series membership does not cover the top-level games exactly',
+    };
   }
 
   return {
