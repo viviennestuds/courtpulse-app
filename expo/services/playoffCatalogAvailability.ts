@@ -55,11 +55,19 @@ export function classifyPlayoffCatalogAcquisition(payload: unknown): PlayoffCata
     };
   }
 
-  if (payload.success !== true) {
+  if (payload.success === false) {
     return {
       state: 'unavailable',
       reason: 'requestFailure',
       message: 'Playoff catalog acquisition failed',
+    };
+  }
+
+  if (payload.success !== true) {
+    return {
+      state: 'unavailable',
+      reason: 'incompatiblePayload',
+      message: 'Playoff catalog response is missing success authority',
     };
   }
 
