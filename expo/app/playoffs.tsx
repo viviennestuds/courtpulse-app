@@ -8,6 +8,7 @@ import { Colors } from '@/constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { getPlayoffCatalog } from '@/services/nbaDataProxy';
+import { requireUsablePlayoffCatalog } from '@/services/playoffCatalogAvailability';
 import { buildPlayoffBracket, PlayoffBracketRound, PlayoffCatalogLike, PlayoffConference, PlayoffSeries, PlayoffSeriesGame, PlayoffTeamSlot } from '@/utils/playoffBracket';
 
 interface RgbColor {
@@ -205,6 +206,11 @@ function filterAndOrderRounds(rounds: PlayoffBracketRound[], conferenceScope: Co
     .sort(compareRoundsForDisplay);
 }
 
+async function getUsablePlayoffCatalog(): Promise<PlayoffCatalogLike> {
+  const response = await getPlayoffCatalog();
+  return requireUsablePlayoffCatalog(response) as PlayoffCatalogLike;
+}
+
 export default function PlayoffsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -215,14 +221,14 @@ export default function PlayoffsScreen() {
 
   const query = useQuery({
     queryKey: ['playoffCatalog'],
-    queryFn: getPlayoffCatalog,
+    queryFn: getUsablePlayoffCatalog,
     staleTime: 1000 * 60 * 15,
     gcTime: 1000 * 60 * 60,
     retry: 1,
     enabled,
   });
 
-  const bracket = useMemo(() => buildPlayoffBracket(query.data as PlayoffCatalogLike | undefined), [query.data]);
+  const bracket = useMemo(() => buildPlayoffBracket(query.data), [query.data]);
   const displayRounds = useMemo(
     () => filterAndOrderRounds(bracket.rounds, conferenceScope, roundScope),
     [bracket.rounds, conferenceScope, roundScope]
@@ -284,15 +290,7 @@ export default function PlayoffsScreen() {
         {query.isError && (
           <View style={styles.errorBanner}>
             <WifiOff size={16} color={Colors.warning} />
-            <Text style={styles.errorBannerText}>Unable to load playoff schedule metadata. Pull back and try again.</Text>
-          </View>
-        )}
-
-        {!query.isLoading && !query.isError && bracket.rounds.length === 0 && (
-          <View style={styles.emptyState}>
-            <GitFork size={32} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No playoff series found</Text>
-            <Text style={styles.emptyText}>CourtPulse only shows games with playoff schedule metadata here.</Text>
+            <Text style={styles.errorBannerText}>Unable to establish a usable playoff catalog. Pull back and try again.</Text>
           </View>
         )}
 
