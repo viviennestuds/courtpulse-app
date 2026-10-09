@@ -1,16 +1,17 @@
-# Web 0.3B — Recovery A: Game Detail Summary Evidence Resolution — Exact Admission Proposal
+# Web 0.3B — Recovery A: Game Detail Summary Evidence Resolution — Admission
 
-**Status:** PROPOSED  
-**Target decision state if explicitly accepted:** ADMITTED  
+**Status:** ADMITTED  
+**Admission date:** 2026-10-09  
+**Admitted proposal:** `71fb36c57658714bddf59a011a4f93d513fce428`  
 **Proposal date:** 2026-10-09  
 **Repository baseline:** `45ce4b27282443fdfccb2e51b980e3a92f4dc623`  
-**Authority:** proposed only; no Recovery A production change is ADMITTED
+**Authority:** project-owner admission; implementation not yet IMPLEMENTED, validation not yet VALIDATED, release not yet RELEASE-ACCEPTED
 
-## Decision sought and minimum sufficient contract
+## Admitted decision and minimum sufficient contract
 
-Admit a **client-only, Game Detail > Summary-specific** recovery of already-acquired team statistics during partial Stats hydration. Compatible field evidence must be preserved and resolved before missing values are converted to zero, and only evidence-backed numbers may be presented. Scope is **the Summary Team Comparison and single-team Team Stats views**. The existing shared `homeTeamStats` / `awayTeamStats` numeric contracts and their Matchup/analytics consumers are not redefined.
+This admission authorizes a **client-only, Game Detail > Summary-specific** recovery of already-acquired team statistics during partial Stats hydration. Compatible field evidence must be preserved and resolved before missing values are converted to zero, and only evidence-backed numbers may be presented. Scope is **the Summary Team Comparison and single-team Team Stats views**. The existing shared `homeTeamStats` / `awayTeamStats` numeric contracts and their Matchup/analytics consumers are not redefined.
 
-This is a narrowly bounded production admission proposal, not implementation authorization. Evidence recovery is complete enough to propose behavior; the exact admission awaits independent normative review and project-owner acceptance.
+The independently reviewed behavior in RA-01 through RA-06 is **ADMITTED** for implementation only within the boundaries below. This admission does not itself mean implementation has occurred, validation has passed, or release acceptance has been granted.
 
 ## Observed problem and evidentiary limits
 
@@ -30,7 +31,7 @@ At baseline, `expo/services/nbaDataProxy.ts`:
 
 **Authority limit:** HTTP success, `sourceStatus:"ok"`, `hasTeamBoxScore:true`, or a team-shell record is not proof that a particular statistic is available. Recovery A does not redefine any of those backend statuses.
 
-## Proposed admitted behavior
+## Admitted behavior
 
 ### RA-01 — Preserve evidence before lossy numeric normalization
 
@@ -105,9 +106,9 @@ Recovery A does not admit: changes to deployed `nba-data-proxy` or `nba-stats-pr
 
 Recovery B (capability truthfulness) and Recovery C (live PBP acquisition) remain independent. A validated Recovery A improvement must not wait for their resolution. A future backend change must separately satisfy accepted AC-10 release recoverability requirements.
 
-## Admission boundary / review questions
+## Admission boundary and retained review questions
 
-For independent normative review, resolve narrowly:
+The exact reviewed proposal retained the following implementation-evidence questions; they do not expand this admission:
 
 1. Is the Summary-specific, pre-loss evidence resolver the minimum sufficient implementation boundary while preserving shared numeric team records?
 2. Are the proposed identity/placeholder association rules and per-source percentage scales sufficiently constrained for implementation?
@@ -116,4 +117,4 @@ For independent normative review, resolve narrowly:
 5. Are both Summary viewing modes and incomplete comparison geometry covered without a broader UI redesign?
 6. Is fixture provenance represented truthfully?
 
-This is a **PROPOSED** contract only. Neither Recovery A implementation nor its validation or release is authorized as completed by this document. Any later admission must reference the exact independently reviewed proposal commit and record project-owner authority explicitly.
+**Recovery A production behavior is ADMITTED under RA-01 through RA-06 only. Recovery A implementation is NOT YET IMPLEMENTED, validation is NOT YET VALIDATED, and release is NOT YET RELEASE-ACCEPTED.**
