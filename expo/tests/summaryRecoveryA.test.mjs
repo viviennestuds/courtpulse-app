@@ -111,6 +111,100 @@ describe('Recovery A pure Summary evidence resolution', () => {
     expect(resolved.away.assists.value).toBe(44);
   });
 
+  test('unrelated contradictory away identity cannot suppress positively matched home evidence', () => {
+    const resolved = resolveSummaryEvidence(evidence({
+      traditional: teams({ assists: 29 }, { assists: 99 }, HOME, '99'),
+      headline: teams({ assists: 21 }, { assists: 99 }, HOME, '99'),
+    }));
+    expect(resolved.home.assists).toMatchObject({ value: 29, source: 'traditional' });
+    expect(resolved.away.assists.value).toBeNull();
+  });
+
+  test('duplicate canonical IDs in named slots reject both records, including the apparently matched slot', () => {
+    for (const duplicateId of [HOME, AWAY]) {
+      const resolved = resolveSummaryEvidence(evidence({
+        traditional: teams({ assists: 31 }, { assists: 44 }, duplicateId, duplicateId),
+        headline: null,
+      }));
+      expect(resolved.home.assists.value).toBeNull();
+      expect(resolved.away.assists.value).toBeNull();
+    }
+  });
+
+  test('swapped named canonical team IDs cannot obtain authority from matching side labels', () => {
+    const resolved = resolveSummaryEvidence(evidence({
+      traditional: teams({ assists: 31 }, { assists: 44 }, AWAY, HOME),
+      headline: null,
+    }));
+    expect(resolved.home.assists.value).toBeNull();
+    expect(resolved.away.assists.value).toBeNull();
+  });
+
+  test('placeholder identities still require compatible game-scoped opposing identity', () => {
+    const rejected = resolveSummaryEvidence(evidence({
+      traditional: teams({ assists: 31 }, { assists: 44 }, 0, '99'),
+      headline: null,
+    }));
+    expect(rejected.home.assists.value).toBeNull();
+    expect(rejected.away.assists.value).toBeNull();
+
+    const admitted = resolveSummaryEvidence(evidence({
+      traditional: { gameId: GAME, ...teams({ assists: 0 }, { assists: 44 }, 0, AWAY) },
+      headline: null,
+    }));
+    expect(admitted.home.assists).toMatchObject({ value: 0, source: 'traditional' });
+    expect(admitted.away.assists.value).toBe(44);
+  });
+
+  test('array identity requires a unique canonical ID claim, regardless of declared side', () => {
+    const unique = resolveSummaryEvidence(evidence({
+      traditional: {
+        gameId: GAME,
+        teams: [
+          { teamId: HOME, homeAway: 'home', stats: { assists: 31 } },
+          { teamId: AWAY, homeAway: 'away', stats: { assists: 44 } },
+        ],
+      },
+      headline: null,
+    }));
+    expect(unique.home.assists.value).toBe(31);
+    expect(unique.away.assists.value).toBe(44);
+
+    const duplicate = resolveSummaryEvidence(evidence({
+      traditional: {
+        gameId: GAME,
+        teams: [
+          { teamId: HOME, homeAway: 'home', stats: { assists: 31 } },
+          { teamId: HOME, homeAway: 'away', stats: { assists: 99 } },
+        ],
+      },
+      headline: null,
+    }));
+    expect(duplicate.home.assists.value).toBeNull();
+
+    const swappedSides = resolveSummaryEvidence(evidence({
+      traditional: {
+        gameId: GAME,
+        teams: [
+          { teamId: HOME, homeAway: 'away', stats: { assists: 31 } },
+          { teamId: AWAY, homeAway: 'home', stats: { assists: 44 } },
+        ],
+      },
+      headline: null,
+    }));
+    expect(swappedSides.home.assists.value).toBeNull();
+    expect(swappedSides.away.assists.value).toBeNull();
+  });
+
+  test('contradictory source game ID cannot authorize otherwise correctly identified team records', () => {
+    const resolved = resolveSummaryEvidence(evidence({
+      traditional: { gameId: 'different-game', ...teams({ assists: 31 }, { assists: 44 }) },
+      headline: null,
+    }));
+    expect(resolved.home.assists.value).toBeNull();
+    expect(resolved.away.assists.value).toBeNull();
+  });
+
   test('placeholder named side is accepted only with game-scoped identity; unscoped arrays cannot establish it', () => {
     const named = resolveSummaryEvidence(evidence({ traditional: teams({ assists: 0 }, {}, 0, 0) }));
     expect(named.home.assists.value).toBe(0);
