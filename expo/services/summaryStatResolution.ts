@@ -167,17 +167,21 @@ function sourceTeam(
   const ownId = usableTeamId(own?.teamId);
   const oppositeId = usableTeamId(opposite?.teamId);
   if (ownId && ownId !== expectedId) return null;
-  if (oppositeId && oppositeId !== otherId) return null;
+  // A duplicate claim of this canonical ID makes both named slots ambiguous.
+  if (oppositeId === expectedId) return null;
+  // Unlike a positive ID match, a placeholder still needs compatible pairing.
+  // An unrelated opposing mismatch must not veto an explicit own-ID match.
+  if (!ownId && oppositeId && oppositeId !== otherId) return null;
   if (own && (own.homeAway == null || identity(own.homeAway).toLowerCase() === side)) {
     if (ownId === expectedId) return own;
     if (!ownId && oppositeId !== expectedId) return own;
   }
-  const candidates = (group?.teams ?? []).filter(team => {
-    const id = usableTeamId(team.teamId);
-    const declaredSide = identity(team.homeAway).toLowerCase();
-    return id === expectedId && (!declaredSide || declaredSide === side);
-  });
-  return candidates.length === 1 ? candidates[0] : null;
+  // Array records never gain identity from position or side. Count ALL claims
+  // for the canonical ID, including records with a contradictory side label.
+  const candidates = (group?.teams ?? []).filter(team => usableTeamId(team.teamId) === expectedId);
+  if (candidates.length !== 1) return null;
+  const declaredSide = identity(candidates[0].homeAway).toLowerCase();
+  return !declaredSide || declaredSide === side ? candidates[0] : null;
 }
 
 function rawStats(team: RawSummaryTeam | null): Record<string, unknown> {
