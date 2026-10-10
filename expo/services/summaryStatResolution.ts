@@ -169,12 +169,11 @@ function sourceTeam(
   if (ownId && ownId !== expectedId) return null;
   // A duplicate claim of this canonical ID makes both named slots ambiguous.
   if (oppositeId === expectedId) return null;
-  // Unlike a positive ID match, a placeholder still needs compatible pairing.
-  // An unrelated opposing mismatch must not veto an explicit own-ID match.
-  if (!ownId && oppositeId && oppositeId !== otherId) return null;
   if (own && (own.homeAway == null || identity(own.homeAway).toLowerCase() === side)) {
     if (ownId === expectedId) return own;
-    if (!ownId && oppositeId !== expectedId) return own;
+    // A named placeholder still needs compatible pairing, unlike an array
+    // record that can independently prove identity with a unique real ID.
+    if (!ownId && (!oppositeId || oppositeId === otherId)) return own;
   }
   // Array records never gain identity from position or side. Count ALL claims
   // for the canonical ID, including records with a contradictory side label.
