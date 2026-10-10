@@ -233,6 +233,7 @@ export function useGameDetail(gameId: string) {
     awayTeamStats: boxData?.awayTeamStats ?? {},
     officialAdvanced: boxData?.officialAdvanced,
     hydration: boxData?.hydration,
+    summaryTeamStats: boxData?.summaryTeamStats,
     events: pbpData?.events ?? [],
     shots: pbpData?.shots ?? [],
     rawActions: pbpData?.rawActions ?? [],
