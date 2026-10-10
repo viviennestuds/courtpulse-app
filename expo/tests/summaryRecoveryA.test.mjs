@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { resolveSummaryEvidence, summaryStatValue, summaryComparisonWidths, normalizeSourcePercentage } from '../services/summaryStatResolution';
-import { normalizeProxyBoxscore, normalizeStatsHydrationBoxscore } from '../services/nbaDataProxy';
 import { buildSummaryDisplayRows } from '../services/summaryPresentation';
 import { readFileSync } from 'node:fs';
 
 globalThis.__DEV__ = false;
+
+// Adapter unit tests do not exercise native device APIs. Mock only this runtime
+// dependency before importing the REAL production NBA normalization adapter.
+mock.module('react-native', () => ({ Platform: { OS: 'web' } }));
+const { normalizeProxyBoxscore, normalizeStatsHydrationBoxscore } = await import('../services/nbaDataProxy');
 
 const HOME = '1610612747';
 const AWAY = '1610612758';
