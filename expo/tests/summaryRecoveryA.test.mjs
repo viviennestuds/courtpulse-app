@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { resolveSummaryEvidence, summaryStatValue, summaryComparisonWidths } from '../services/summaryStatResolution';
 import { normalizeProxyBoxscore, normalizeStatsHydrationBoxscore } from '../services/nbaDataProxy';
+import { buildSummaryDisplayRows } from '../services/summaryPresentation';
+import { readFileSync } from 'node:fs';
 
 globalThis.__DEV__ = false;
 
@@ -189,5 +191,79 @@ describe('Recovery A production adapters — reconstructed characterization inpu
     expect(normalized.summaryTeamStats.home.fieldGoalsPercentage.value).toBe(50);
     expect(normalized.homeTeamStats.assists).toBe(22);
     expect(normalized.homeTeamStats.reboundsTotal).toBe(40);
+  });
+});
+
+describe('Recovery A production Summary projection and isolated wiring', () => {
+  test('Both and selected team modes read the same resolved values; optional rows honor missingness', () => {
+    const summary = resolveSummaryEvidence(evidence());
+    const rows = buildSummaryDisplayRows(summary);
+    const rebound = rows.find(row => row.key === 'reboundsTotal');
+    const assists = rows.find(row => row.key === 'assists');
+    const turnover = rows.find(row => row.key === 'turnovers');
+    const points = rows.find(row => row.key === 'points');
+    expect(rebound).toMatchObject({ homeValue: 28, awayValue: 33 });
+    expect(assists).toMatchObject({ homeValue: 21, awayValue: 15 });
+    expect(turnover).toMatchObject({ homeValue: null, awayValue: null });
+    expect(points).toMatchObject({ homeValue: 80, awayValue: 70 });
+    expect(rows.find(row => row.key === 'freeThrowsPercentage')).toMatchObject({ homeValue: 84, awayValue: 63.6, isPercentage: true });
+  });
+
+  test('one-side availability does not turn absent opponent value into a graphically implied zero', () => {
+    const summary = resolveSummaryEvidence(evidence({
+      traditional: teams({ assists: null }, {}),
+      headline: { homeTeam: { teamId: HOME, stats: { assists: 21 } } },
+    }));
+    const row = buildSummaryDisplayRows(summary).find(row => row.key === 'assists');
+    expect(row).toMatchObject({ homeValue: 21, awayValue: null });
+    expect(summaryComparisonWidths(row.homeValue, row.awayValue)).toMatchObject({ available: false });
+  });
+
+  test('supported missing optional misc row is hidden if neither side has evidence', () => {
+    const summary = resolveSummaryEvidence(evidence({ headline: teams({ assists: 1 }, { assists: 2 }) }));
+    expect(buildSummaryDisplayRows(summary).find(row => row.key === 'benchPoints')).toBeUndefined();
+  });
+
+  test('completed multi-stat Traditional fixture preserves preferred values and source authority', () => {
+    const boston = '1610612738';
+    const cleveland = '1610612739';
+    const full = resolveSummaryEvidence({
+      requestedGameId: '0012600011',
+      responseGameId: '0012600011',
+      homeTeamId: cleveland,
+      awayTeamId: boston,
+      gameScore: {
+        gameId: '0012600011',
+        homeTeam: { teamId: cleveland, score: 113 },
+        awayTeam: { teamId: boston, score: 124 },
+      },
+      traditional: {
+        gameId: '0012600011',
+        homeTeam: { teamId: cleveland, statistics: { assists: 32, reboundsTotal: 39, fieldGoalsPercentage: 0.478 } },
+        awayTeam: { teamId: boston, statistics: { assists: 29, reboundsTotal: 56, fieldGoalsPercentage: 0.414 } },
+      },
+      headline: {
+        homeTeam: { teamId: cleveland, stats: { assists: 99 } },
+        awayTeam: { teamId: boston, stats: { assists: 99 } },
+      },
+    });
+    expect(full.home.assists).toMatchObject({ value: 32, source: 'traditional' });
+    expect(full.away.reboundsTotal.value).toBe(56);
+    expect(full.home.points.value).toBe(113);
+    expect(full.away.points.value).toBe(124);
+    expect(full.home.fieldGoalsPercentage.value).toBeCloseTo(47.8, 4);
+  });
+
+  test('only Game Detail Summary consumes optional evidence; Matchup keeps original numeric props', () => {
+    const route = readFileSync(new URL('../app/game/[id]/index.tsx', import.meta.url), 'utf8');
+    const hook = readFileSync(new URL('../hooks/useNbaData.ts', import.meta.url), 'utf8');
+    const provider = readFileSync(new URL('../services/dataProvider.ts', import.meta.url), 'utf8');
+    expect(route).toContain('summaryTeamStats={summaryTeamStats}');
+    expect(route).toContain('legacyBackendSummary={!summaryTeamStats');
+    expect(route).toContain('<MatchupRealDataTab');
+    expect(route).not.toContain('summaryTeamStats={summaryTeamStats}\n                homeBoxScore=');
+    expect(hook).toContain('summaryTeamStats: boxData?.summaryTeamStats');
+    expect(provider).not.toContain('summaryTeamStats');
+    expect(route).toContain('neutralWhenMissing={!legacyBackendSummary}');
   });
 });
