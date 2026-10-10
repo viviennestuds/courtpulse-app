@@ -78,10 +78,11 @@ const PERCENTAGE_SOURCE_FIELDS: Record<
     threePointersPercentage: { threePointersPercentage: 'fraction' },
     freeThrowsPercentage: { freeThrowsPercentage: 'fraction' },
   },
+  // statsGameHydration v33 normalizes Traditional upstream aliases to short output keys.
   traditional: {
-    fieldGoalsPercentage: { fieldGoalsPercentage: 'fraction', fgPct: 'fraction' },
-    threePointersPercentage: { threePointersPercentage: 'fraction', fg3Pct: 'fraction' },
-    freeThrowsPercentage: { freeThrowsPercentage: 'fraction', ftPct: 'fraction' },
+    fieldGoalsPercentage: { fgPct: 'fraction' },
+    threePointersPercentage: { fg3Pct: 'fraction' },
+    freeThrowsPercentage: { ftPct: 'fraction' },
   },
   headline: {
     fieldGoalsPercentage: { fieldGoalsPercentage: 'fraction' },
