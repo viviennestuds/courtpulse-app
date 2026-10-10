@@ -10,6 +10,7 @@ import {
   parsePTToSeconds,
 } from './nbaApi';
 import type { CdnPbpAction, GameDetailData } from './nbaGameData';
+import { resolveSummaryEvidence } from './summaryStatResolution';
 import type { GameMatchupEventsV2Response } from '@/types/matchupEventsV2';
 import { normalizePlayerBoxScoreMiscStats, normalizeTeamBoxScoreMiscStats } from '@/utils/nbaBoxScoreMiscStats';
 
@@ -1156,6 +1157,17 @@ export function normalizeStatsHydrationBoxscore(response: StatsGameHydrationResp
     awayBoxScore: statsPlayersForTeam(response.boxscore, 'away', game.awayTeam.id, response.misc),
     homeTeamStats: extractStatsTeamStats(response, homeTeam, game.homeTeam.id, 'home'),
     awayTeamStats: extractStatsTeamStats(response, awayTeam, game.awayTeam.id, 'away'),
+    summaryTeamStats: resolveSummaryEvidence({
+      requestedGameId: game.id,
+      responseGameId: response.gameId,
+      homeTeamId: game.homeTeam.id,
+      awayTeamId: game.awayTeam.id,
+      gameScore: response.game ?? response.summary,
+      traditional: response.boxscore,
+      headline: response.game?.headlineStats,
+      postgame: response.summary?.postgameCharts,
+      misc: response.misc ? { gameId: response.misc.gameId, teams: response.misc.teams } : null,
+    }) ?? undefined,
     officialAdvanced: normalizeOfficialAdvanced(response, game),
     hydration: {
       schemaVersion: response.schemaVersion ?? null,
@@ -1290,6 +1302,14 @@ export function normalizeProxyBoxscore(response: NbaBoxscoreProxyResponse): Game
     awayBoxScore: activePlayers(gameShape.awayTeam),
     homeTeamStats: extractTeamStats(gameShape.homeTeam),
     awayTeamStats: extractTeamStats(gameShape.awayTeam),
+    summaryTeamStats: resolveSummaryEvidence({
+      requestedGameId: game.id,
+      responseGameId: response.gameId,
+      homeTeamId: game.homeTeam.id,
+      awayTeamId: game.awayTeam.id,
+      gameScore: gameShape,
+      primary: gameShape,
+    }) ?? undefined,
   };
 }
 
