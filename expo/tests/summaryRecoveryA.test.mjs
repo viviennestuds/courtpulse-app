@@ -170,6 +170,17 @@ describe('Recovery A pure Summary evidence resolution', () => {
     expect(unique.home.assists.value).toBe(31);
     expect(unique.away.assists.value).toBe(44);
 
+    const independentArrayMatch = resolveSummaryEvidence(evidence({
+      traditional: {
+        gameId: GAME,
+        homeTeam: { teamId: '99', homeAway: 'home', stats: { assists: 99 } },
+        teams: [{ teamId: AWAY, homeAway: 'away', stats: { assists: 44 } }],
+      },
+      headline: null,
+    }));
+    expect(independentArrayMatch.home.assists.value).toBeNull();
+    expect(independentArrayMatch.away.assists.value).toBe(44);
+
     const duplicate = resolveSummaryEvidence(evidence({
       traditional: {
         gameId: GAME,
