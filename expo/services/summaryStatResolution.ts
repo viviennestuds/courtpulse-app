@@ -64,14 +64,43 @@ export interface SummaryResolutionEvidence {
 
 type StatDefinition = {
   keys: readonly string[];
-  unit?: 'fraction' | 'percentagePoints';
+};
+
+type PercentageStatKey = 'fieldGoalsPercentage' | 'threePointersPercentage' | 'freeThrowsPercentage';
+export type PercentageScale = 'fraction' | 'percentagePoints';
+
+const PERCENTAGE_SOURCE_FIELDS: Record<
+  Exclude<SummaryEvidenceSource, 'gameScore'>,
+  Partial<Record<PercentageStatKey, Readonly<Record<string, PercentageScale>>>>
+> = {
+  primary: {
+    fieldGoalsPercentage: { fieldGoalsPercentage: 'fraction' },
+    threePointersPercentage: { threePointersPercentage: 'fraction' },
+    freeThrowsPercentage: { freeThrowsPercentage: 'fraction' },
+  },
+  traditional: {
+    fieldGoalsPercentage: { fieldGoalsPercentage: 'fraction', fgPct: 'fraction' },
+    threePointersPercentage: { threePointersPercentage: 'fraction', fg3Pct: 'fraction' },
+    freeThrowsPercentage: { freeThrowsPercentage: 'fraction', ftPct: 'fraction' },
+  },
+  headline: {
+    fieldGoalsPercentage: { fieldGoalsPercentage: 'fraction' },
+    threePointersPercentage: { threePointersPercentage: 'fraction' },
+    freeThrowsPercentage: { freeThrowsPercentage: 'fraction' },
+  },
+  postgame: {
+    fieldGoalsPercentage: { fieldGoalsPercentage: 'fraction' },
+    threePointersPercentage: { threePointersPercentage: 'fraction' },
+    freeThrowsPercentage: { freeThrowsPercentage: 'fraction' },
+  },
+  misc: {},
 };
 
 const ORDINARY_DEFINITIONS: Record<SummaryStatKey, StatDefinition> = {
   points: { keys: ['points'] },
-  fieldGoalsPercentage: { keys: ['fieldGoalsPercentage', 'fieldGoalPct', 'fgPct'], unit: 'fraction' },
-  threePointersPercentage: { keys: ['threePointersPercentage', 'threePointPct', 'threePointPercentage', 'fg3Pct'], unit: 'fraction' },
-  freeThrowsPercentage: { keys: ['freeThrowsPercentage', 'freeThrowPct', 'ftPct'], unit: 'fraction' },
+  fieldGoalsPercentage: { keys: [] },
+  threePointersPercentage: { keys: [] },
+  freeThrowsPercentage: { keys: [] },
   reboundsTotal: { keys: ['reboundsTotal', 'rebounds'] },
   reboundsOffensive: { keys: ['reboundsOffensive', 'offensiveRebounds'] },
   reboundsDefensive: { keys: ['reboundsDefensive', 'defensiveRebounds'] },
@@ -155,24 +184,35 @@ function rawStats(team: RawSummaryTeam | null): Record<string, unknown> {
   return team?.statistics ?? team?.stats ?? {};
 }
 
+export function normalizeSourcePercentage(value: unknown, scale: PercentageScale): number | null {
+  const parsed = readFiniteNumber(value);
+  if (parsed === null || parsed < 0) return null;
+  if (scale === 'fraction') return parsed <= 1 ? parsed * 100 : null;
+  if (scale === 'percentagePoints') return parsed <= 100 ? parsed : null;
+  return null;
+}
+
 function resolveFromRecord(
   team: RawSummaryTeam | null,
   field: SummaryStatKey,
-  source: SummaryEvidenceSource,
+  source: Exclude<SummaryEvidenceSource, 'gameScore'>,
 ): ResolvedSummaryStat {
   if (!team) return emptyStat();
-  const definition = ORDINARY_DEFINITIONS[field];
   const stats = rawStats(team);
-  for (const key of definition.keys) {
+  if (field === 'fieldGoalsPercentage' || field === 'threePointersPercentage' || field === 'freeThrowsPercentage') {
+    const admittedFields = PERCENTAGE_SOURCE_FIELDS[source][field];
+    if (!admittedFields) return emptyStat();
+    for (const [key, scale] of Object.entries(admittedFields)) {
+      if (!Object.prototype.hasOwnProperty.call(stats, key)) continue;
+      const value = normalizeSourcePercentage(stats[key], scale);
+      if (value !== null) return resolvedStat(value, source, key);
+    }
+    return emptyStat();
+  }
+  for (const key of ORDINARY_DEFINITIONS[field].keys) {
     if (!Object.prototype.hasOwnProperty.call(stats, key)) continue;
     const raw = readFiniteNumber(stats[key]);
-    if (raw === null || raw < 0) continue;
-    if (definition.unit === 'fraction') {
-      if (raw > 1) continue;
-      return resolvedStat(raw * 100, source, key);
-    }
-    if (definition.unit === 'percentagePoints' && raw > 100) continue;
-    if (!definition.unit && !Number.isInteger(raw)) continue;
+    if (raw === null || raw < 0 || !Number.isInteger(raw)) continue;
     return resolvedStat(raw, source, key);
   }
   return emptyStat();
