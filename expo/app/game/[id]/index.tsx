@@ -8,6 +8,8 @@ import { Spacing, BorderRadius, FontSize, FontWeight } from '@/constants/theme';
 import SegmentControl from '@/components/SegmentControl';
 import SubTabBar from '@/components/SubTabBar';
 import StatBar from '@/components/StatBar';
+import type { ResolvedSummaryPair } from '@/services/summaryStatResolution';
+import { buildSummaryDisplayRows, type SummaryDisplayRow } from '@/services/summaryPresentation';
 import PlayByPlayItem from '@/components/PlayByPlayItem';
 import GamePlayByPlayV1 from '@/components/GamePlayByPlayV1';
 import ShotChart from '@/components/ShotChart';
@@ -47,26 +49,10 @@ const TABS = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
 const TAB_NAMES = ['Summary', 'Matchup', 'PBP', 'Shots', 'Analytics'];
 const GAME_OBSERVABILITY_TABS: GameObservabilityTab[] = ['summary', 'matchup', 'pbp', 'shots', 'analytics'];
 
-type SummaryStatRow = {
-  label: string;
-  key: string;
-  value: number | null;
-};
-
-function hasTeamStat(stats: Record<string, number>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(stats, key) && Number.isFinite(stats[key]);
-}
-
-function getOptionalTeamStat(stats: Record<string, number>, key: string): number | null {
-  return hasTeamStat(stats, key) ? stats[key] : null;
-}
-
-function formatSummaryStatValue(row: SummaryStatRow): string {
-  if (row.value === null) return '—';
-  if (row.key === 'fieldGoalsPercentage' || row.key === 'threePointersPercentage') {
-    return `${row.value.toFixed(1)}%`;
-  }
-  return String(row.value);
+function formatSummaryStatValue(row: SummaryDisplayRow, side: 'home' | 'away'): string {
+  const value = side === 'home' ? row.homeValue : row.awayValue;
+  if (value === null) return '—';
+  return row.isPercentage ? `${value.toFixed(1)}%` : String(value);
 }
 
 const ANALYTICS_SUB_NAMES = ['Runs', 'Droughts', 'Lineups', 'Impact'];
@@ -128,6 +114,7 @@ export default function GameDetailScreen() {
     awayBoxScore,
     homeTeamStats,
     awayTeamStats,
+    summaryTeamStats,
     events,
     rawActions,
     boxScoreSource,
@@ -405,6 +392,8 @@ export default function GameDetailScreen() {
             awayBoxScore={awayBoxScore}
             homeTeamStats={homeTeamStats}
             awayTeamStats={awayTeamStats}
+            summaryTeamStats={summaryTeamStats}
+            legacyBackendSummary={!summaryTeamStats && boxScoreSource === 'backend'}
             teamTabs={summaryTeamTabs}
             selectedTeamTab={summaryTeamTab}
             onTeamTabChange={setSummaryTeamTab}
@@ -520,71 +509,65 @@ export default function GameDetailScreen() {
   );
 }
 
-function SummaryTab({ game, homeBoxScore, awayBoxScore, homeTeamStats, awayTeamStats, teamTabs, selectedTeamTab, onTeamTabChange, gameId, onPlayerPress }: {
+function SummaryTab({ game, homeBoxScore, awayBoxScore, homeTeamStats, awayTeamStats, summaryTeamStats, legacyBackendSummary, teamTabs, selectedTeamTab, onTeamTabChange, gameId, onPlayerPress }: {
   game: { homeTeam: { abbreviation: string; score: number; primaryColor: string }; awayTeam: { abbreviation: string; score: number; primaryColor: string } };
   homeBoxScore: BoxScorePlayer[];
   awayBoxScore: BoxScorePlayer[];
   homeTeamStats: Record<string, number>;
   awayTeamStats: Record<string, number>;
+  summaryTeamStats?: ResolvedSummaryPair;
+  legacyBackendSummary: boolean;
   teamTabs: string[];
   selectedTeamTab: number;
   onTeamTabChange: (index: number) => void;
   gameId?: string;
   onPlayerPress?: (playerId: string) => void;
 }) {
-  const hasStats = Object.keys(homeTeamStats).length > 1;
   const showHome = selectedTeamTab === 0 || selectedTeamTab === 2;
   const showAway = selectedTeamTab === 1 || selectedTeamTab === 2;
   const showBoth = selectedTeamTab === 2;
+  const rows = useMemo(
+    () => buildSummaryDisplayRows(
+      summaryTeamStats,
+      legacyBackendSummary ? homeTeamStats : undefined,
+      legacyBackendSummary ? awayTeamStats : undefined,
+    ),
+    [summaryTeamStats, legacyBackendSummary, homeTeamStats, awayTeamStats],
+  );
 
   return (
     <View>
       <SubTabBar tabs={teamTabs} selected={selectedTeamTab} onSelect={onTeamTabChange} />
 
-      {showBoth && hasStats && (
+      {showBoth && (
         <>
           <Text style={styles.sectionLabel}>TEAM COMPARISON</Text>
           <View style={styles.card}>
-            <StatBar label="Points" homeValue={homeTeamStats.points ?? game.homeTeam.score} awayValue={awayTeamStats.points ?? game.awayTeam.score} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="FG%" homeValue={Math.round((homeTeamStats.fieldGoalsPercentage ?? 0) * 10) / 10} awayValue={Math.round((awayTeamStats.fieldGoalsPercentage ?? 0) * 10) / 10} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} isPercentage />
-            <StatBar label="3PT%" homeValue={Math.round((homeTeamStats.threePointersPercentage ?? 0) * 10) / 10} awayValue={Math.round((awayTeamStats.threePointersPercentage ?? 0) * 10) / 10} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} isPercentage />
-            <StatBar label="Rebounds" homeValue={homeTeamStats.reboundsTotal ?? 0} awayValue={awayTeamStats.reboundsTotal ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Off. Reb" homeValue={homeTeamStats.reboundsOffensive ?? 0} awayValue={awayTeamStats.reboundsOffensive ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Def. Reb" homeValue={homeTeamStats.reboundsDefensive ?? 0} awayValue={awayTeamStats.reboundsDefensive ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Assists" homeValue={homeTeamStats.assists ?? 0} awayValue={awayTeamStats.assists ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Turnovers" homeValue={homeTeamStats.turnovers ?? 0} awayValue={awayTeamStats.turnovers ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            {(hasTeamStat(homeTeamStats, 'pointsOffTurnovers') || hasTeamStat(awayTeamStats, 'pointsOffTurnovers')) && (
-              <StatBar label="PTS OFF TOV" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsOffTurnovers')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsOffTurnovers')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            )}
-            <StatBar label="Steals" homeValue={homeTeamStats.steals ?? 0} awayValue={awayTeamStats.steals ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Blocks" homeValue={homeTeamStats.blocks ?? 0} awayValue={awayTeamStats.blocks ?? 0} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            <StatBar label="Paint PTS" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsInThePaint')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsInThePaint')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            {(hasTeamStat(homeTeamStats, 'pointsSecondChance') || hasTeamStat(awayTeamStats, 'pointsSecondChance')) && (
-              <StatBar label="2ND CHANCE" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsSecondChance')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsSecondChance')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            )}
-            <StatBar label="Fast Break" homeValue={getOptionalTeamStat(homeTeamStats, 'pointsFastBreak')} awayValue={getOptionalTeamStat(awayTeamStats, 'pointsFastBreak')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            {(hasTeamStat(homeTeamStats, 'benchPoints') || hasTeamStat(awayTeamStats, 'benchPoints')) && (
-              <StatBar label="BENCH PTS" homeValue={getOptionalTeamStat(homeTeamStats, 'benchPoints')} awayValue={getOptionalTeamStat(awayTeamStats, 'benchPoints')} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-            )}
+            {rows.map(row => (
+              <StatBar
+                key={row.key}
+                label={row.label}
+                homeValue={row.homeValue}
+                awayValue={row.awayValue}
+                homeColor={game.homeTeam.primaryColor}
+                awayColor={game.awayTeam.primaryColor}
+                isPercentage={row.isPercentage}
+                neutralWhenMissing={!legacyBackendSummary}
+              />
+            ))}
           </View>
         </>
       )}
 
-      {!showBoth && hasStats && (
+      {!showBoth && (
         <>
           <Text style={styles.sectionLabel}>TEAM STATS</Text>
           <TeamStatsSingle
-            stats={selectedTeamTab === 0 ? homeTeamStats : awayTeamStats}
-            score={selectedTeamTab === 0 ? game.homeTeam.score : game.awayTeam.score}
+            rows={rows}
+            side={selectedTeamTab === 0 ? 'home' : 'away'}
             color={selectedTeamTab === 0 ? game.homeTeam.primaryColor : game.awayTeam.primaryColor}
           />
         </>
-      )}
-
-      {showBoth && !hasStats && (
-        <View style={styles.card}>
-          <StatBar label="Points" homeValue={game.homeTeam.score} awayValue={game.awayTeam.score} homeColor={game.homeTeam.primaryColor} awayColor={game.awayTeam.primaryColor} />
-        </View>
       )}
 
       {showBoth && homeBoxScore.length > 0 && (
@@ -625,54 +608,19 @@ function SummaryTab({ game, homeBoxScore, awayBoxScore, homeTeamStats, awayTeamS
   );
 }
 
-function TeamStatsSingle({ stats, score, color }: {
-  stats: Record<string, number>;
-  score: number;
+function TeamStatsSingle({ rows, side, color }: {
+  rows: SummaryDisplayRow[];
+  side: 'home' | 'away';
   color: string;
 }) {
-  const statRows: SummaryStatRow[] = useMemo(() => {
-    const rows: SummaryStatRow[] = [
-      { label: 'Points', key: 'points', value: stats.points ?? score },
-      { label: 'FG%', key: 'fieldGoalsPercentage', value: stats.fieldGoalsPercentage ?? 0 },
-      { label: '3PT%', key: 'threePointersPercentage', value: stats.threePointersPercentage ?? 0 },
-      { label: 'Rebounds', key: 'reboundsTotal', value: stats.reboundsTotal ?? 0 },
-      { label: 'Off. Reb', key: 'reboundsOffensive', value: stats.reboundsOffensive ?? 0 },
-      { label: 'Def. Reb', key: 'reboundsDefensive', value: stats.reboundsDefensive ?? 0 },
-      { label: 'Assists', key: 'assists', value: stats.assists ?? 0 },
-      { label: 'Turnovers', key: 'turnovers', value: stats.turnovers ?? 0 },
-    ];
-
-    if (hasTeamStat(stats, 'pointsOffTurnovers')) {
-      rows.push({ label: 'PTS OFF TOV', key: 'pointsOffTurnovers', value: stats.pointsOffTurnovers });
-    }
-
-    rows.push(
-      { label: 'Steals', key: 'steals', value: stats.steals ?? 0 },
-      { label: 'Blocks', key: 'blocks', value: stats.blocks ?? 0 },
-      { label: 'Paint PTS', key: 'pointsInThePaint', value: getOptionalTeamStat(stats, 'pointsInThePaint') },
-    );
-
-    if (hasTeamStat(stats, 'pointsSecondChance')) {
-      rows.push({ label: '2ND CHANCE', key: 'pointsSecondChance', value: stats.pointsSecondChance });
-    }
-
-    rows.push({ label: 'Fast Break', key: 'pointsFastBreak', value: getOptionalTeamStat(stats, 'pointsFastBreak') });
-
-    if (hasTeamStat(stats, 'benchPoints')) {
-      rows.push({ label: 'BENCH PTS', key: 'benchPoints', value: stats.benchPoints });
-    }
-
-    return rows;
-  }, [stats, score]);
-
   return (
     <View style={styles.card}>
-      {statRows.map((row) => (
-        <View key={row.label} style={styles.singleStatRow}>
+      {rows.map((row) => (
+        <View key={row.key} style={styles.singleStatRow}>
           <Text style={styles.singleStatLabel}>{row.label}</Text>
           <View style={styles.singleStatValueWrap}>
             <View style={[styles.singleStatDot, { backgroundColor: color }]} />
-            <Text style={styles.singleStatValue}>{formatSummaryStatValue(row)}</Text>
+            <Text style={styles.singleStatValue}>{formatSummaryStatValue(row, side)}</Text>
           </View>
         </View>
       ))}

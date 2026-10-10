@@ -1,3 +1,4 @@
+import type { ResolvedSummaryPair } from './summaryStatResolution';
 import { BoxScorePlayer, GameDetailHydrationMetadata, OfficialGameAdvancedStats, PlayByPlayEvent, ShotEvent, Game } from '@/types';
 import { fetchNbaCdn, fetchNbaStats, parsePTClock, parsePTMinutes, parsePTToSeconds, getGameStatus, getPeriodText, getStatusClockText } from './nbaApi';
 import { getTeamInfoById } from '@/constants/nbaTeams';
@@ -122,6 +123,7 @@ export interface GameDetailData {
   awayTeamStats: Record<string, number>;
   officialAdvanced?: OfficialGameAdvancedStats;
   hydration?: GameDetailHydrationMetadata;
+  summaryTeamStats?: ResolvedSummaryPair;
 }
 
 function transformBoxScorePlayer(p: CdnBoxScorePlayer): BoxScorePlayer {
