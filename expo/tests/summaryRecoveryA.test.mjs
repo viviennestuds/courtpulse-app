@@ -94,7 +94,7 @@ describe('Recovery A pure Summary evidence resolution', () => {
 
   test('explicit traditional zero and nonzero values win over conflicting headline values', () => {
     const resolved = resolveSummaryEvidence(evidence({
-      traditional: teams({ assists: 0, steals: 17, fieldGoalsPercentage: 0 }, { assists: 5 }),
+      traditional: teams({ assists: 0, steals: 17, fgPct: 0 }, { assists: 5 }),
     }));
     expect(resolved.home.assists).toMatchObject({ value: 0, source: 'traditional', available: true });
     expect(resolved.home.steals).toMatchObject({ value: 17, source: 'traditional' });
@@ -229,7 +229,7 @@ describe('Recovery A pure Summary evidence resolution', () => {
 
   test('fractional percentages obey source-defined fraction scale, 0 and 1 remain meaningful', () => {
     const resolved = resolveSummaryEvidence(evidence({
-      traditional: teams({ fieldGoalsPercentage: 0, threePointersPercentage: 1, freeThrowsPercentage: 0.478 }, {}),
+      traditional: teams({ fgPct: 0, fg3Pct: 1, ftPct: 0.478 }, {}),
     }));
     expect(resolved.home.fieldGoalsPercentage.value).toBe(0);
     expect(resolved.home.threePointersPercentage.value).toBe(100);
@@ -249,7 +249,7 @@ describe('Recovery A pure Summary evidence resolution', () => {
 
   test('only explicitly admitted source-field fraction scales can enter Summary', () => {
     const resolved = resolveSummaryEvidence(evidence({
-      traditional: teams({ fieldGoalsPercentage: 47.8, freeThrowsPercentage: 0.84 }, {}),
+      traditional: teams({ fieldGoalsPercentage: 47.8, ftPct: 0.84 }, {}),
       headline: teams({ fieldGoalsPercentage: 0.478, threePointersPercentage: 0.291 }, {}),
     }));
     expect(resolved.home.fieldGoalsPercentage).toMatchObject({ value: 47.8, source: 'headline' });
@@ -260,6 +260,55 @@ describe('Recovery A pure Summary evidence resolution', () => {
       postgame: null,
     }));
     expect(unsupported.home.fieldGoalsPercentage.value).toBeNull();
+  });
+
+  test('hydrated Traditional descriptive aliases have no authority over corroborated short fields', () => {
+    const resolved = resolveSummaryEvidence(evidence({
+      traditional: teams({
+        fieldGoalsPercentage: 0.95, fgPct: 0.4,
+        threePointersPercentage: 0.99, fg3Pct: 0.25,
+        freeThrowsPercentage: 0.88, ftPct: 0.75,
+      }, {}),
+      headline: teams({
+        fieldGoalsPercentage: 0.473,
+        threePointersPercentage: 0.292,
+        freeThrowsPercentage: 0.84,
+      }, {}),
+    }));
+    expect(resolved.home.fieldGoalsPercentage).toMatchObject({ value: 40, source: 'traditional', sourceField: 'fgPct' });
+    expect(resolved.home.threePointersPercentage).toMatchObject({ value: 25, source: 'traditional', sourceField: 'fg3Pct' });
+    expect(resolved.home.freeThrowsPercentage).toMatchObject({ value: 75, source: 'traditional', sourceField: 'ftPct' });
+  });
+
+  test('unsupported descriptive-only Traditional percentages defer to compatible headline or remain unavailable', () => {
+    const withHeadline = resolveSummaryEvidence(evidence({
+      traditional: teams({
+        fieldGoalsPercentage: 0.95,
+        threePointersPercentage: 0.99,
+        freeThrowsPercentage: 0.88,
+      }, {}),
+      headline: teams({
+        fieldGoalsPercentage: 0.473,
+        threePointersPercentage: 0.292,
+        freeThrowsPercentage: 0.84,
+      }, {}),
+    }));
+    expect(withHeadline.home.fieldGoalsPercentage).toMatchObject({ value: 47.3, source: 'headline', sourceField: 'fieldGoalsPercentage' });
+    expect(withHeadline.home.threePointersPercentage).toMatchObject({ value: 29.2, source: 'headline', sourceField: 'threePointersPercentage' });
+    expect(withHeadline.home.freeThrowsPercentage).toMatchObject({ value: 84, source: 'headline', sourceField: 'freeThrowsPercentage' });
+
+    const noFallback = resolveSummaryEvidence(evidence({
+      traditional: teams({
+        fieldGoalsPercentage: 0.95,
+        threePointersPercentage: 0.99,
+        freeThrowsPercentage: 0.88,
+      }, {}),
+      headline: null,
+      postgame: null,
+    }));
+    for (const field of ['fieldGoalsPercentage', 'threePointersPercentage', 'freeThrowsPercentage']) {
+      expect(noFallback.home[field]).toMatchObject({ value: null, available: false, source: null });
+    }
   });
 
   test('invalid and absent source fields remain unavailable instead of defaulting to zero', () => {
@@ -374,8 +423,8 @@ describe('Recovery A production Summary projection and isolated wiring', () => {
       },
       traditional: {
         gameId: '0012600011',
-        homeTeam: { teamId: cleveland, statistics: { assists: 32, reboundsTotal: 39, fieldGoalsPercentage: 0.478 } },
-        awayTeam: { teamId: boston, statistics: { assists: 29, reboundsTotal: 56, fieldGoalsPercentage: 0.414 } },
+        homeTeam: { teamId: cleveland, statistics: { assists: 32, reboundsTotal: 39, fgPct: 0.478 } },
+        awayTeam: { teamId: boston, statistics: { assists: 29, reboundsTotal: 56, fgPct: 0.414 } },
       },
       headline: {
         homeTeam: { teamId: cleveland, stats: { assists: 99 } },
