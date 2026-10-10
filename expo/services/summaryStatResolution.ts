@@ -138,7 +138,7 @@ function sourceTeam(
   const ownId = usableTeamId(own?.teamId);
   const oppositeId = usableTeamId(opposite?.teamId);
   if (ownId && ownId !== expectedId) return null;
-  if (oppositeId === expectedId) return null;
+  if (oppositeId && oppositeId !== otherId) return null;
   if (own && (own.homeAway == null || identity(own.homeAway).toLowerCase() === side)) {
     if (ownId === expectedId) return own;
     if (!ownId && oppositeId !== expectedId) return own;
