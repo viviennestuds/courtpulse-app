@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing, FontSize, FontWeight } from '@/constants/theme';
+import { summaryComparisonWidths } from '@/services/summaryStatResolution';
 
 interface StatBarProps {
   label: string;
@@ -14,12 +15,13 @@ interface StatBarProps {
 }
 
 export default React.memo(function StatBar({ label, homeValue, awayValue, homeColor, awayColor, isPercentage, neutralWhenMissing = false }: StatBarProps) {
-  const neutral = neutralWhenMissing && (homeValue === null || awayValue === null);
+  const widths = neutralWhenMissing ? summaryComparisonWidths(homeValue, awayValue) : null;
+  const neutral = neutralWhenMissing && !widths?.available;
   const safeHomeValue = homeValue ?? 0;
   const safeAwayValue = awayValue ?? 0;
   const total = safeHomeValue + safeAwayValue;
-  const homeWidth = total > 0 ? (safeHomeValue / total) * 100 : 50;
-  const awayWidth = total > 0 ? (safeAwayValue / total) * 100 : 50;
+  const homeWidth = widths?.home ?? (total > 0 ? (safeHomeValue / total) * 100 : 50);
+  const awayWidth = widths?.away ?? (total > 0 ? (safeAwayValue / total) * 100 : 50);
   const format = (v: number | null) => {
     if (v === null) return '—';
     return isPercentage ? `${v.toFixed(1)}%` : String(v);
