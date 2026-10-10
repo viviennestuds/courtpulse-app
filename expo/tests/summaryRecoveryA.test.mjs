@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveSummaryEvidence, summaryStatValue, summaryComparisonWidths } from '../services/summaryStatResolution';
+import { resolveSummaryEvidence, summaryStatValue, summaryComparisonWidths, normalizeSourcePercentage } from '../services/summaryStatResolution';
 import { normalizeProxyBoxscore, normalizeStatsHydrationBoxscore } from '../services/nbaDataProxy';
 import { buildSummaryDisplayRows } from '../services/summaryPresentation';
 import { readFileSync } from 'node:fs';
@@ -125,6 +125,32 @@ describe('Recovery A pure Summary evidence resolution', () => {
     expect(resolved.home.fieldGoalsPercentage.value).toBe(0);
     expect(resolved.home.threePointersPercentage.value).toBe(100);
     expect(resolved.home.freeThrowsPercentage.value).toBeCloseTo(47.8, 4);
+  });
+
+  test('unit conversion is explicit, never chosen from the value magnitude', () => {
+    expect(normalizeSourcePercentage(0.478, 'fraction')).toBeCloseTo(47.8, 4);
+    expect(normalizeSourcePercentage(1, 'fraction')).toBe(100);
+    expect(normalizeSourcePercentage(47.8, 'fraction')).toBeNull();
+    expect(normalizeSourcePercentage(47.8, 'percentagePoints')).toBe(47.8);
+    expect(normalizeSourcePercentage(1, 'percentagePoints')).toBe(1);
+    expect(normalizeSourcePercentage(0.478, 'percentagePoints')).toBe(0.478);
+    expect(normalizeSourcePercentage(101, 'percentagePoints')).toBeNull();
+    expect(normalizeSourcePercentage(-1, 'fraction')).toBeNull();
+  });
+
+  test('only explicitly admitted source-field fraction scales can enter Summary', () => {
+    const resolved = resolveSummaryEvidence(evidence({
+      traditional: teams({ fieldGoalsPercentage: 47.8, freeThrowsPercentage: 0.84 }, {}),
+      headline: teams({ fieldGoalsPercentage: 0.478, threePointersPercentage: 0.291 }, {}),
+    }));
+    expect(resolved.home.fieldGoalsPercentage).toMatchObject({ value: 47.8, source: 'headline' });
+    expect(resolved.home.freeThrowsPercentage).toMatchObject({ value: 84, source: 'traditional' });
+    const unsupported = resolveSummaryEvidence(evidence({
+      traditional: teams({ fieldGoalsPercentage: 47.8 }, {}),
+      headline: teams({ fieldGoalPct: 47.8 }, {}),
+      postgame: null,
+    }));
+    expect(unsupported.home.fieldGoalsPercentage.value).toBeNull();
   });
 
   test('invalid and absent source fields remain unavailable instead of defaulting to zero', () => {
@@ -265,5 +291,11 @@ describe('Recovery A production Summary projection and isolated wiring', () => {
     expect(hook).toContain('summaryTeamStats: boxData?.summaryTeamStats');
     expect(provider).not.toContain('summaryTeamStats');
     expect(route).toContain('neutralWhenMissing={!legacyBackendSummary}');
+    const statBar = readFileSync(new URL('../components/StatBar.tsx', import.meta.url), 'utf8');
+    expect(statBar).toContain("import { summaryComparisonWidths } from '@/services/summaryStatResolution'");
+    expect(statBar).toContain('neutralWhenMissing ? summaryComparisonWidths(homeValue, awayValue) : null');
+    expect(statBar).toContain('neutralWhenMissing && !widths?.available');
+    expect(statBar).toContain('widths?.home ??');
+    expect(statBar).toContain('widths?.away ??');
   });
 });
