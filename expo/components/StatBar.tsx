@@ -10,9 +10,11 @@ interface StatBarProps {
   homeColor: string;
   awayColor: string;
   isPercentage?: boolean;
+  neutralWhenMissing?: boolean;
 }
 
-export default React.memo(function StatBar({ label, homeValue, awayValue, homeColor, awayColor, isPercentage }: StatBarProps) {
+export default React.memo(function StatBar({ label, homeValue, awayValue, homeColor, awayColor, isPercentage, neutralWhenMissing = false }: StatBarProps) {
+  const neutral = neutralWhenMissing && (homeValue === null || awayValue === null);
   const safeHomeValue = homeValue ?? 0;
   const safeAwayValue = awayValue ?? 0;
   const total = safeHomeValue + safeAwayValue;
@@ -31,8 +33,14 @@ export default React.memo(function StatBar({ label, homeValue, awayValue, homeCo
         <Text style={styles.value}>{format(awayValue)}</Text>
       </View>
       <View style={styles.barContainer}>
-        <View style={[styles.barHome, { width: `${homeWidth}%`, backgroundColor: homeColor }]} />
-        <View style={[styles.barAway, { width: `${awayWidth}%`, backgroundColor: awayColor }]} />
+        {neutral ? (
+          <View style={[styles.barNeutral, { backgroundColor: Colors.divider }]} />
+        ) : (
+          <>
+            <View style={[styles.barHome, { width: `${homeWidth}%`, backgroundColor: homeColor }]} />
+            <View style={[styles.barAway, { width: `${awayWidth}%`, backgroundColor: awayColor }]} />
+          </>
+        )}
       </View>
     </View>
   );
@@ -68,6 +76,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
     gap: 2,
+  },
+  barNeutral: {
+    height: 4,
+    width: '100%',
   },
   barHome: {
     height: 4,
