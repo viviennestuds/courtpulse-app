@@ -2,6 +2,7 @@
 
 **Status:** PROPOSED — **NOT RELEASE-ACCEPTED**  
 **Proposal date:** 2026-10-10  
+**Readiness evidence update:** 2026-10-11; proposal still awaits independent review of this exact revised SHA and an explicit owner release decision  
 **Repository proposal baseline:** `9cbd6755cd6257a749790560053834b92bbe9eba` (`main` at review)  
 **Validated implementation:** `5f15d8af33dcd7bd9ff22471944f3f53cb4be563` (PR [#7](https://github.com/viviennestuds/courtpulse-app/pull/7))  
 **Validation authority:** Independent reviewer accepted bounded RA-01 through RA-06 as `VALIDATED`; no project-owner release authorization implied  
@@ -21,8 +22,8 @@ Do not collapse these distinct identities:
 | Future integration commit | **NOT CREATED**. A merge commit may have a new SHA; verify the complete integration tree retains the validated eight-file Recovery A changes exactly and contains no unrelated change |
 | Future Pages build source SHA and artifact | **NOT CREATED**. Must be established from the actual Actions checkout/export/upload/deploy run; do not assume equality from PR approval or merge |
 | Latest historically successful Pages source | `a4217e79dc25876cbde1ac6c8c5f1163ef5e0ee0`, 2026-08-28 workflow run [33143321417](https://github.com/viviennestuds/courtpulse-app/actions/runs/33143321417) |
-| Currently served Pages | Public HTML returned HTTP 200 on 2026-10-10 at `https://viviennestuds.github.io/courtpulse-app/` and referenced exactly the August 28 build's known JS/CSS asset **filenames**. This is a strong asset-identity observation, **not proof of byte-identical assets or the current deployment control-plane SHA** |
-| Rollback source candidate | `a4217e79dc25876cbde1ac6c8c5f1163ef5e0ee0` given matched asset filenames, **conditional** on release-time published-source confirmation and a practicable re-publish path; not an already recoverable retained artifact |
+| Currently served Pages | HTTP 200 observed on 2026-10-10 and again 2026-10-11 at `https://viviennestuds.github.io/courtpulse-app/`; public HTML references exactly the August 28 known JS/CSS asset **filenames**. This does **not** prove byte equality, current executed bundle identity, or current deployment control-plane SHA |
+| Rollback source candidate | `a4217e79dc25876cbde1ac6c8c5f1163ef5e0ee0`, historically deployed with identical pre-Recovery-A `expo/` and `.github/` trees. A local nonpublishing frozen install and Expo Web export **passed**, but a real Pages restoration and current deployment control-plane identity remain **unproven** |
 
 **Repository / control-plane observation scope:** GitHub repository and workflow reads and public Page checks were made 2026-10-10. GitHub `main` was unprotected at read time; permissions and environment state may change. The GitHub connection could not read current Pages deployment identity or current Actions variable values through the available endpoint access. Unknown must remain unknown.
 
@@ -61,7 +62,7 @@ The build step takes **build-time repository Actions variables**:
 - `EXPO_PUBLIC_SENTRY_DSN`
 - `EXPO_PUBLIC_FEATURE_PROFILE`
 
-`FeatureFlagsProvider.tsx` uses `process.env.EXPO_PUBLIC_FEATURE_PROFILE?.trim() === 'web_beta'` to establish Web Beta behavior. The August 28 successful build job log explicitly printed `EXPO_PUBLIC_FEATURE_PROFILE: web_beta`, but **the CURRENT repository variable was not directly readable**. Before release acceptance, the authorized operator must inspect **Settings → Secrets and variables → Actions → Variables**, and confirm that `EXPO_PUBLIC_FEATURE_PROFILE` is exactly `web_beta` and that the other build variables are correctly scoped/configured (without exposing or checking in secrets). Capture the inspection date and evidence. Never infer present values from old logs.
+`FeatureFlagsProvider.tsx` uses `process.env.EXPO_PUBLIC_FEATURE_PROFILE?.trim() === 'web_beta'` to establish Web Beta behavior. The August 28 successful build job log explicitly printed `EXPO_PUBLIC_FEATURE_PROFILE: web_beta`. On 2026-10-11 the project owner directly checked **Settings → Secrets and variables → Actions → Variables** and confirmed that the **current repository variable is `web_beta`**. This is **owner-reported current control-plane evidence**, not an independently read API value; the GitHub connector does not expose this setting. The actual configured values/scope of `EXPO_PUBLIC_FEEDBACK_ENDPOINT` and `EXPO_PUBLIC_SENTRY_DSN` have **not** been confirmed through the same evidence; validate relevant variables before separately authorized Pages dispatch without disclosing secrets. No new build or deploy follows from this observation.
 
 **Pages/publication observation:** On 2026-10-10, public HTML at `https://viviennestuds.github.io/courtpulse-app/` returned 200 and referenced `_expo/static/js/web/entry-6029938dec72b5217afc4ed1b59081f4.js` and `_expo/static/css/default-styles-0e38295fc7b48fadf3d291c0c2e516d5.css`. The August 28 successful export log lists those exact filenames and explicitly records the `web_beta` environment. This **supports** continuity of the historically deployed asset family. It is **not** an observed live Pages deployment SHA nor byte-equality proof. The retrieved Actions artifact listing is empty (historical artifact not currently retrievable there); do not promise one-click artifact rollback.
 
@@ -72,19 +73,19 @@ The build step takes **build-time repository Actions variables**:
 - **Before separately authorized Pages dispatch:** reconfirm Actions variables, selected workflow ref and source SHA, Pages settings/environment, and establish a concrete rollback source/build path. Confirm the future build is for the integration SHA (not a stale or floating branch).
 - **After deploy:** capture run ID, checkout SHA, successful export, artifact identity if available, deployment environment URL / ID, and independently inspect the served site and shipped bundle identity, not just a successful Actions green checkmark.
 
-## 4. Known limitations requiring explicit owner disposition
+## 4. Existing limitations — owner temporarily accepted (not release acceptance)
 
-| Limitation | Established state | Proposed release disposition to decide |
+| Limitation | Established state | Owner-authorized *temporary Web Beta* disposition / limitation |
 | --- | --- | --- |
-| Baseline TypeScript TS2322 | Existing `FlagOverrides` vs partial Web Beta preset assignment at `FeatureFlagsProvider.tsx:80`; same sole compiler error on baseline and candidate | **Proposed: document as accepted preexisting debt for this Web Beta release only**. No claim of full typecheck PASS; independent future issue for correction. Owner may instead hold release |
-| NBA CDN 403 / partial live game evidence | Primary CDN access failures persist in some observations; Recovery A truthfully presents supported fallback Summary values but does not repair upstream transport, PBP, Shots, or player-level Traditional data | **Proposed: accept bounded degradation for trusted Web Beta** if live smoke tests show no false zeros or fabricated availability. No guarantee of feed recovery |
-| Live-game empty-player-box-score text | During controlled live Q3 when player rows unavailable, UI says **“Stats will appear once the game starts”** even though game is underway | **Explicit product-owner decision required:** accept temporarily with separate capability-truthfulness follow-up or hold release until separately corrected. Do not alter Recovery A's accepted stats implementation implicitly |
+| Baseline TypeScript TS2322 | Existing `FlagOverrides` vs partial Web Beta preset assignment at `FeatureFlagsProvider.tsx:80`; same sole compiler error on baseline and candidate | **OWNER-APPROVED TEMPORARY EXCEPTION, 2026-10-11:** document baseline debt for this Web Beta release only. Do not claim full typecheck PASS; track correction separately |
+| NBA CDN 403 / partial live game evidence | Primary CDN access failures persist in some observations; Recovery A truthfully presents supported fallback Summary values but does not repair upstream transport, PBP, Shots, or player-level Traditional data | **OWNER-APPROVED TEMPORARY EXCEPTION, 2026-10-11:** bounded existing degradation only, with no fabricated zeros/availability and no claim of restored live feed; follow-up Recovery B/C remains separate |
+| Live-game empty-player-box-score text | During controlled live Q3 when player rows unavailable, UI says **“Stats will appear once the game starts”** even though game is underway | **OWNER-APPROVED TEMPORARY EXCEPTION, 2026-10-11:** allow this preexisting misleading copy only for this release, **require separately tracked correction**; never call the current text accurate for live games or implicitly change validated Recovery A implementation |
 | Shared/other product surfaces | RA-06 proves representative shared-record parity, not every Matchup/analytics interaction or source state | Preserve established scope; smoke-test representative game and unrelated pages after publication rather than claim universal regression proof |
 | Deployed backend provenance | Supabase `nba-data-proxy` v33 source is retrievable but NBA Edge Functions are not fully repository-backed in current topology | No backend deploy in Recovery A. Confirm current v33 transport output if production changed; recovery of backend source remains separate proposed scope |
 
 ## 5. Recoverability and rollback proposal — NOT YET PROVEN
 
-**Before a release acceptance decision**, the release operator should record the exact presently published Pages deployment (via authorized Pages control-plane inspection) and secure the ability to publish the prior known source or artifact. A matching public asset filename alone does not meet this requirement.
+**Preferred before release acceptance:** identify the exact presently published Pages deployment using authorized control-plane access and establish an executable procedure to republish the prior known source or retained artifact. The currently available GitHub connector cannot read the live Pages deployment SHA, and the historical artifact is not retrievable. Matching public asset filenames are evidence of continuity, **not** proof of the currently deployed SHA. A release decision that proceeds without full control-plane identity and demonstrated operational rollback requires an **explicit, narrowly stated owner risk acceptance after independent review**, not a silent presumption that these gates passed.
 
 **Candidate restoration approaches (choose and rehearse one):**
 
@@ -95,7 +96,7 @@ The prior workflow artifact ID `9674808212` and ZIP SHA-256 `8aee1eb9eba5aa5ef31
 
 **Rollback trigger proposal:** Any material new false-zero Summary stats, fabricated bar ratios, incorrect team/source identity, game page crash, or unexpectedly widespread feature exposure should halt rollout/trigger an explicit restoration decision. Record who has rollback authorization and what observations justify it.
 
-**Post-rollback evidence:** exact workflow/ref and Pages run, restored site response/assets, Web Beta feature profile, representative game page/Stats fallback, and new known-good published source identity. If restoration cannot be demonstrated in advance, release readiness remains **BLOCKED / UNRESOLVED**.
+**Post-rollback evidence:** exact workflow/ref and Pages run, restored site response/assets, Web Beta feature profile, representative game page/Stats fallback, and new known-good published source identity. An actual Pages restoration **has not been demonstrated**. Its operational risk remains **UNRESOLVED** until (a) supporting evidence is obtained, or (b) the project owner expressly accepts the residual risk for this bounded release after independent review. Neither the local export nor the accepted three existing limitations automatically grants that separate risk acceptance.
 
 ## 6. Post-deployment observations (conditional, not already executed)
 
@@ -115,24 +116,37 @@ Do **not** use reconstructed fixture values as if they were the live real-time N
 | Gate | Current state | Required before owner can accept |
 | --- | --- | --- |
 | Exact Recovery A implementation | **VALIDATED** `5f15d8af33dcd7bd9ff22471944f3f53cb4be563` | Preserve exact eight-file candidate; hold implementation changes |
-| Integration and source provenance | PR draft/unmerged; integration SHA nonexistent | Explicit separate merge authorization, verified post-merge tree, then separately authorized Pages dispatch |
-| Build/profile contract | Historical `web_beta`; current variable **UNKNOWN** | Direct operator confirmation of actual variable values and relevant environment |
-| Existing limitations | Documented, **not owner-release-dispositioned** | Owner choices for TS2322, CDN degradation, and inaccurate Q3 empty state |
-| Published baseline | Current site HTML matches historical asset filenames; control-plane SHA **UNKNOWN** | Record current Pages deployment/source identity and ability to restore it |
-| Rollback practicality | Proposed procedures only; historical artifact inaccessible | Choose/test executable recovery path with accepted limitations |
+| Integration and source provenance | PR #7 draft/unmerged; integration SHA nonexistent | Owner may grant conditional release acceptance for the exact validated SHA **before** merge; separately authorize merge; then verify post-merge tree and separately authorize Pages dispatch |
+| Build/profile contract | **Owner confirmed current repository `EXPO_PUBLIC_FEATURE_PROFILE=web_beta`** on 2026-10-11; historical build log corroborates its previous use. Other build variable values/scoping not established | Preserve owner-report provenance; reconfirm relevant variable scope/settings before Pages dispatch |
+| Existing limitations | **All three owner-approved as temporary Web Beta exceptions** on 2026-10-11 | Preserve exact boundaries and separately track Q3 player-box copy correction; temporary exception is not broad release acceptance |
+| Published baseline | Current public Pages HTML again matches August 28 asset filenames on 2026-10-11; control-plane SHA **UNKNOWN** | Seek control-plane identity if possible; otherwise explicitly disposition missing provenance/risk; do not assert exact deployed SHA |
+| Rollback practicality | Historical source **rebuild/export PASS**; local Git worktree list contains only the clean Recovery A checkout; original Pages rollback **not rehearsed** | Independently review feasibility evidence; select source-based rollback procedure and explicitly resolve remaining nonrehearsed-restoration risk before acceptance |
 | Deployment post-checks | Proposed, not executed | Define responsibilities, criteria and evidence capture; subsequently observe actual release |
 | Release authority | **NOT RELEASE-ACCEPTED** | Independent proposal review; explicit project-owner release acceptance recorded in a durable separate promotion commit |
 
 **Recommended sequence:** independent review this **PROPOSED** document → close its control-plane/recoverability questions → project-owner release-acceptance decision and durable record → separately authorized merge → integration tree verification → separately authorized manual Pages dispatch → actual release observations / rollback if needed.
 
-## 8. Reviewer questions
 
-1. Is the August 28 log + current asset-name match sufficient to identify a *candidate* rollback source, and what additional control-plane evidence is required to treat it as an executable rollback?
-2. Can the current `EXPO_PUBLIC_FEATURE_PROFILE` be independently confirmed as `web_beta` at acceptance time, without conflating historical build logs and current Actions settings?
-3. Is the preexisting TS2322 baseline debt acceptable for bounded Web Beta while explicitly labeling full typecheck failure?
-4. Is the Q3 empty-state copy defect temporarily acceptable for this release, or does product truthfulness require a separate fix first?
-5. What level of pre-release restore rehearsal and post-deployment observation is proportional to this client-only Summary change?
-6. Can release acceptance be granted conditionally before merge, with explicit post-merge content verification and separately authorized deployment, without confusing **RELEASE-ACCEPTED**, **MERGED**, and **DEPLOYED**?
+## 7A. Readiness evidence received after initial proposal (2026-10-11)
+
+This is a **descriptive evidence reconciliation**, not a release promotion. Earlier section-2 validation remains pinned to the exact eight-file implementation at `5f15d8af33dcd7bd9ff22471944f3f53cb4be563`.
+
+- **Independent proposal review:** The earlier draft release-readiness proposal received an independent **PASS at PROPOSED level**, not RELEASE-ACCEPTED. This revision supplies newly obtained readiness evidence and must be **reviewed at its own exact commit**.
+- **Owner control-plane confirmation:** Project owner inspected current GitHub Actions repository variables on 2026-10-11 and explicitly confirmed `EXPO_PUBLIC_FEATURE_PROFILE=web_beta`. The owner, not the GitHub connector, is the evidence source; no authenticated variable-value response was obtained by the assistant.
+- **Historical-source build feasibility:** Windows nonpublishing rehearsal explicitly targeted `a4217e79dc25876cbde1ac6c8c5f1163ef5e0ee0` in an isolated temporary Git worktree and used intended `web_beta` profile. User-supplied recovered evidence archive `CourtPulse-Rollback-Export-20261011-215702-evidence.zip`, SHA-256 `a35ba3796a9f87dad647107b3f7901082c9697ab6a29810ef3e141cf5d50ba2b`, contains 7 files: two command records, corresponding stdout/stderr, and an export manifest. Records report Bun frozen install **exit 0** (73.876 sec, 995 packages) and Expo Web export **exit 0** (41.502 sec, 2,929 modules). Manifest records 25 paths totaling **4,863,925 bytes**, `index.html` and `404.html` with the same SHA-256, and `.nojekyll`. This archive stores file-hash **measurements**, not exported binary bytes; individual bundle hashes cannot be independently recomputed from the archive. The rebuilt JS asset filename differs from the August 28 deployment; no bitwise-artifact identity is claimed.
+- **Rehearsal-script cleanup distinction:** The post-export `git worktree remove --force` initially failed with a Windows long-path error, preventing automatic final `result.json` and ZIP completion. The owner subsequently reported running **`git worktree list`** with exactly one registered worktree, `C:/Users/awate/CourtPulse-Validation 5f15d8a (detached HEAD)`, and **`git status --short`** with no output. This **establishes the observed Git worktree registry and checkout cleanliness** at that point, rather than proving every temporary file was physically deleted or that the failed finalization phase was retroactively executed. The short displayed hash is consistent with the validated implementation; the full implementation SHA remains established independently from GitHub.
+- **Public Pages observation:** On 2026-10-11, a fresh public HTML fetch returned **HTTP 200** and continued to reference the exact August 28 logged JS/CSS asset names. Current Pages deployment control-plane SHA, current bytes of those assets, and executable restoration remain unverified.
+- **Three owner-approved temporary limitations:** The owner explicitly approved preexisting TS2322, ongoing CDN 403/reduced live-game capability, and inaccurate live-game player-statistics empty-state copy **for this bounded Web Beta release**, subject to a separately tracked correction of the copy. This decision is **not** an approval to misrepresent missing basketball data, a waiver of other release prerequisites, or a grant of RELEASE-ACCEPTED.
+
+**Open independent-review disposition:** Decide whether a concrete source-based restoration procedure and documented residual risk are sufficient *without an actual Pages rollback rehearsal or authoritative published deployment SHA*. If a conditional release acceptance is recommended, specify the exact content identity, rollback-authority responsibility, acceptance limits, and post-merge/post-deploy evidence gates. The project owner has **not yet explicitly accepted this separate operational rollback uncertainty**. The Pages workflow remains `workflow_dispatch`-only, and no release, merge, Pages dispatch, new feature flags, Supabase mutation, or Gabriel-header changes are authorized by this update.
+
+## 8. Reviewer questions — final bounded release-readiness review
+
+1. Does the independently reconstructed historical source export plus the now-confirmed local worktree registration/checkout cleanliness constitute sufficient **source-build feasibility** evidence, without implying an actual Pages rollback?
+2. Is the owner's direct `web_beta` variable confirmation sufficient for a **bounded release decision** if other variable scoping is reverified before a separately authorized deployment?
+3. Does the record preserve the three expressly approved temporary limitations without accidentally broadening their authority or reopening the validated implementation?
+4. Which specific rollback preparation and decision triggers are necessary before release acceptance, given the lack of live Pages deployment control-plane SHA and unperformed operational rollback? May the owner explicitly accept this residual risk for the bounded client-only release, or is additional rehearsal/evidence indispensable?
+5. Can release acceptance be granted **conditionally at validated SHA** `5f15d8af33dcd7bd9ff22471944f3f53cb4be563` before merge, subject to exact post-integration content parity, separately authorized manual Pages dispatch, and subsequent public Web Beta smoke tests?
 
 **Requested next response:** focused independent release-readiness disposition on this one proposal, not another Recovery A implementation review.
 
